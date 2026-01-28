@@ -1,0 +1,82 @@
+{
+  "name": "@sudobility/sudojo_ocr",
+  "version": "1.0.0",
+  "description": "OCR library for Sudoku puzzle scanning - works on Web, React Native, and Node.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./web": {
+      "import": "./dist/adapters/web.js",
+      "require": "./dist/adapters/web.cjs",
+      "types": "./dist/adapters/web.d.ts"
+    },
+    "./node": {
+      "import": "./dist/adapters/node.js",
+      "require": "./dist/adapters/node.cjs",
+      "types": "./dist/adapters/node.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "bun run build:esm && bun run build:cjs",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json && bun run build:cjs-rename",
+    "build:cjs-rename": "find dist -name '*.js' -not -name '*.cjs' -exec sh -c 'cp \"$1\" \"${1%.js}.cjs\"' _ {} \\;",
+    "clean": "rimraf dist",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest --coverage",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.{ts,js,json,md}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,js,json,md}\"",
+    "typecheck": "tsc --noEmit",
+    "verify": "bun run typecheck && bun run lint && bun run test && bun run build",
+    "prepublishOnly": "bun run clean && bun run verify"
+  },
+  "files": [
+    "dist/**/*",
+    "CLAUDE.md"
+  ],
+  "keywords": [
+    "typescript",
+    "ocr",
+    "sudoku",
+    "sudojo",
+    "image-recognition",
+    "tesseract"
+  ],
+  "author": "Sudobility",
+  "license": "MIT",
+  "peerDependencies": {
+    "tesseract.js": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@napi-rs/canvas": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.38.0",
+    "@napi-rs/canvas": "^0.1.68",
+    "@types/node": "^25.1.0",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
+    "eslint": "^9.38.0",
+    "globals": "^16.4.0",
+    "prettier": "^3.6.2",
+    "rimraf": "^6.0.1",
+    "tesseract.js": "^5.1.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.15"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
