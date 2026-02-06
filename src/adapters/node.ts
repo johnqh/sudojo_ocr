@@ -19,6 +19,12 @@ type NapiCanvas = {
   toDataURL(mimeType?: string): string;
 };
 
+type NapiImageData = {
+  data: Uint8ClampedArray;
+  width: number;
+  height: number;
+};
+
 type NapiContext = {
   fillStyle: string;
   imageSmoothingEnabled: boolean;
@@ -34,8 +40,9 @@ type NapiContext = {
     dw: number,
     dh: number
   ): void;
-  getImageData(x: number, y: number, w: number, h: number): ImageDataLike;
-  putImageData(imageData: ImageDataLike, x: number, y: number): void;
+  getImageData(x: number, y: number, w: number, h: number): NapiImageData;
+  createImageData(width: number, height: number): NapiImageData;
+  putImageData(imageData: NapiImageData, x: number, y: number): void;
 };
 
 type NapiImage = {
@@ -110,7 +117,11 @@ export class NodeCanvasAdapter implements CanvasAdapter {
     y: number
   ): void {
     const ctx = (canvas as unknown as NapiCanvas).getContext('2d');
-    ctx.putImageData(imageData, x, y);
+    // Create a native ImageData object and copy the data
+    // This is needed because @napi-rs/canvas requires its own ImageData type
+    const nativeImageData = ctx.createImageData(imageData.width, imageData.height);
+    nativeImageData.data.set(imageData.data);
+    ctx.putImageData(nativeImageData, x, y);
   }
 
   drawImage(

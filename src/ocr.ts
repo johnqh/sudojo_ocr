@@ -2,7 +2,6 @@
  * Main OCR module for Sudoku puzzle extraction
  */
 
-import type Tesseract from 'tesseract.js';
 import type {
   CanvasAdapter,
   CanvasLike,
@@ -10,6 +9,7 @@ import type {
   OCRResult,
   CellOCRResult,
   OCRProgress,
+  TesseractModule,
 } from './types.js';
 import { DEFAULT_OCR_CONFIG } from './types.js';
 import {
@@ -18,6 +18,7 @@ import {
   preprocessForOCR,
   enhanceContrast,
   binarize,
+  dilate,
   isCellEmpty,
   parseDigitFromText,
 } from './algorithms/index.js';
@@ -101,18 +102,28 @@ function addPadding(
 
 /**
  * Process image data through enhancement and binarization
+ * @param useDilation - Apply dilation to thicken thin strokes (useful for 8s, 9s)
  */
-function processForOCR(adapter: CanvasAdapter, cellCanvas: CanvasLike): CanvasLike {
+function processForOCR(
+  adapter: CanvasAdapter,
+  cellCanvas: CanvasLike,
+  useDilation: boolean = false
+): CanvasLike {
   // Enhance contrast
   const imageData = adapter.getImageData(cellCanvas, 0, 0, cellCanvas.width, cellCanvas.height);
   const enhanced = enhanceContrast(imageData, 1.5);
 
   // Binarize
-  const binarized = binarize(enhanced, 160);
+  let processed = binarize(enhanced, 160);
+
+  // Optionally apply dilation to thicken thin strokes
+  if (useDilation) {
+    processed = dilate(processed);
+  }
 
   // Create new canvas with processed data
   const processedCanvas = adapter.createCanvas(cellCanvas.width, cellCanvas.height);
-  adapter.putImageData(processedCanvas, binarized, 0, 0);
+  adapter.putImageData(processedCanvas, processed, 0, 0);
 
   // Add padding
   return addPadding(adapter, processedCanvas, 20);
@@ -125,7 +136,7 @@ async function recognizeCells(
   adapter: CanvasAdapter,
   cells: CanvasLike[],
   minConfidence: number,
-  tesseract: typeof Tesseract,
+  tesseract: TesseractModule,
   onProgress?: (progress: number) => void
 ): Promise<CellOCRResult[]> {
   const results: CellOCRResult[] = [];
@@ -180,6 +191,24 @@ async function recognizeCells(
       if (parsedDigit !== null && confidence >= minConfidence) {
         digit = parsedDigit;
       }
+
+      // If OCR failed to recognize a valid digit, retry with dilation
+      // Dilation thickens thin strokes which helps with 8s and 9s
+      if (digit === null) {
+        const dilatedCell = processForOCR(adapter, cell, true);
+        const dilatedInput = adapter.toTesseractInput(dilatedCell);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const dilatedResult = await worker.recognize(dilatedInput as any);
+        const dilatedText = dilatedResult.data.text.trim();
+        const dilatedConfidence = dilatedResult.data.confidence || 0;
+
+        const dilatedDigit = parseDigitFromText(dilatedText);
+        if (dilatedDigit !== null && dilatedConfidence >= minConfidence) {
+          digit = dilatedDigit;
+          finalText = dilatedText;
+          finalConfidence = dilatedConfidence;
+        }
+      }
     } catch {
       // OCR failed for this cell
     }
@@ -214,7 +243,7 @@ async function recognizeCells(
 export async function extractSudokuFromImage(
   adapter: CanvasAdapter,
   imageSource: unknown,
-  tesseract: typeof Tesseract,
+  tesseract: TesseractModule,
   config: Partial<OCRConfig> = {},
   onProgress?: (progress: OCRProgress) => void
 ): Promise<OCRResult> {
@@ -337,4 +366,66 @@ export async function detectAndCropBoard(
   }
 
   return adapter.toDataURL(sourceCanvas);
+}
+
+/**
+ * Extract the 81 cell images from a cropped board image
+ * Returns array of 81 data URLs (row-major order)
+ * Useful for UI previews to show what the OCR will process
+ *
+ * @param adapter - Platform-specific canvas adapter
+ * @param croppedBoardImage - Data URL or image source of the cropped board
+ * @param marginRatio - Margin to remove from each cell (0-0.5), default: 0.154
+ * @returns Array of 81 data URLs representing each cell
+ */
+export async function extractCellImages(
+  adapter: CanvasAdapter,
+  croppedBoardImage: unknown,
+  marginRatio: number = 0.154
+): Promise<string[]> {
+  const { image, width, height } = await adapter.loadImage(croppedBoardImage);
+
+  const sourceCanvas = adapter.createCanvas(width, height);
+  adapter.drawImage(sourceCanvas, image, 0, 0, width, height, 0, 0, width, height);
+
+  const cellWidth = width / 9;
+  const cellHeight = height / 9;
+  const marginX = cellWidth * marginRatio;
+  const marginY = cellHeight * marginRatio;
+  const targetSize = 100;
+
+  const cellImages: string[] = [];
+
+  for (let row = 0; row < 9; row++) {
+    for (let col = 0; col < 9; col++) {
+      const srcX = col * cellWidth + marginX;
+      const srcY = row * cellHeight + marginY;
+      const srcWidth = cellWidth - 2 * marginX;
+      const srcHeight = cellHeight - 2 * marginY;
+
+      const scale = Math.max(1, targetSize / Math.min(srcWidth, srcHeight));
+      const cellCanvas = adapter.createCanvas(
+        Math.round(srcWidth * scale),
+        Math.round(srcHeight * scale)
+      );
+
+      adapter.fillRect(cellCanvas, 'white', 0, 0, cellCanvas.width, cellCanvas.height);
+      adapter.drawImage(
+        cellCanvas,
+        sourceCanvas,
+        srcX,
+        srcY,
+        srcWidth,
+        srcHeight,
+        0,
+        0,
+        cellCanvas.width,
+        cellCanvas.height
+      );
+
+      cellImages.push(adapter.toDataURL(cellCanvas));
+    }
+  }
+
+  return cellImages;
 }

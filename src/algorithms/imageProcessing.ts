@@ -208,6 +208,47 @@ export function preprocessForOCR(imageData: ImageDataLike): ImageDataLike {
 }
 
 /**
+ * Morphological dilation - thickens black regions (digits)
+ * Uses a 3x3 structuring element
+ * Useful for thin strokes that OCR struggles to recognize
+ */
+export function dilate(imageData: ImageDataLike): ImageDataLike {
+  const { data, width, height } = imageData;
+  const newData = new Uint8ClampedArray(data.length);
+
+  // Copy original data first
+  for (let i = 0; i < data.length; i++) {
+    newData[i] = safeGet(data, i);
+  }
+
+  // For each pixel, if any neighbor is black (0), make this pixel black
+  // This expands black regions (the digits)
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      let hasBlackNeighbor = false;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const idx = ((y + dy) * width + (x + dx)) * 4;
+          if (safeGet(data, idx) < 128) {
+            hasBlackNeighbor = true;
+            break;
+          }
+        }
+        if (hasBlackNeighbor) break;
+      }
+      if (hasBlackNeighbor) {
+        const idx = (y * width + x) * 4;
+        newData[idx] = 0;
+        newData[idx + 1] = 0;
+        newData[idx + 2] = 0;
+      }
+    }
+  }
+
+  return { data: newData, width, height };
+}
+
+/**
  * Check if a cell is empty based on standard deviation
  */
 export function isCellEmpty(imageData: ImageDataLike): boolean {

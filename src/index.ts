@@ -34,12 +34,14 @@ export type {
   CanvasLike,
   ImageLike,
   ImageDataLike,
+  TesseractModule,
+  TesseractWorker,
 } from './types.js';
 
 export { DEFAULT_OCR_CONFIG } from './types.js';
 
 // Main OCR functions
-export { extractSudokuFromImage, detectAndCropBoard } from './ocr.js';
+export { extractSudokuFromImage, detectAndCropBoard, extractCellImages } from './ocr.js';
 
 // Algorithms (for advanced usage)
 export {

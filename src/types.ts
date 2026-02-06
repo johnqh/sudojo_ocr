@@ -134,3 +134,33 @@ export interface ImageDataLike {
   width: number;
   height: number;
 }
+
+/**
+ * Minimal Tesseract.js interface that works with both v5 and v7
+ * This allows the library to be used with any compatible version
+ */
+export interface TesseractModule {
+  createWorker: (
+    lang: string,
+    oem?: number,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    options?: any
+  ) => Promise<TesseractWorker>;
+  PSM: {
+    SINGLE_CHAR: number;
+  };
+}
+
+/** Minimal Tesseract Worker interface */
+export interface TesseractWorker {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  setParameters: (params: any) => Promise<void>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  recognize: (image: any) => Promise<{
+    data: {
+      text: string;
+      confidence?: number;
+    };
+  }>;
+  terminate: () => Promise<void>;
+}

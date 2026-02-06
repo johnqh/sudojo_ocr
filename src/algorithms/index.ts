@@ -8,6 +8,7 @@ export {
   cannyEdgeDetection,
   enhanceContrast,
   binarize,
+  dilate,
   preprocessForOCR,
   isCellEmpty,
 } from './imageProcessing.js';
