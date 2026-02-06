@@ -25,9 +25,9 @@
   "scripts": {
     "build": "bun run build:esm && bun run build:cjs",
     "build:esm": "tsc -p tsconfig.esm.json",
-    "build:cjs": "tsc -p tsconfig.cjs.json && bun run build:cjs-rename",
-    "build:cjs-rename": "find dist -name '*.js' -not -name '*.cjs' -exec sh -c 'cp \"$1\" \"${1%.js}.cjs\"' _ {} \\;",
-    "clean": "rimraf dist",
+    "build:cjs": "tsc -p tsconfig.cjs.json && bun run build:cjs-copy && rimraf dist-cjs",
+    "build:cjs-copy": "cd dist-cjs && find . -name '*.js' -exec sh -c 'mkdir -p \"../dist/$(dirname \"$1\")\"; cp \"$1\" \"../dist/${1%.js}.cjs\"' _ {} \\;",
+    "clean": "rimraf dist dist-cjs",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
