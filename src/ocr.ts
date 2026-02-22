@@ -11,7 +11,13 @@ import type {
   OCRProgress,
   TesseractModule,
 } from './types.js';
-import { DEFAULT_OCR_CONFIG } from './types.js';
+import {
+  DEFAULT_OCR_CONFIG,
+  OCR_TARGET_CELL_SIZE,
+  OCR_CELL_PADDING,
+  OCR_BINARIZE_THRESHOLD,
+  OCR_CONTRAST_FACTOR,
+} from './types.js';
 import {
   detectBoardRectangle,
   squarifyRectangle,
@@ -36,7 +42,6 @@ function extractCells(
   const cellHeight = source.height / 9;
   const marginX = cellWidth * marginRatio;
   const marginY = cellHeight * marginRatio;
-  const targetSize = 100;
 
   for (let row = 0; row < 9; row++) {
     for (let col = 0; col < 9; col++) {
@@ -45,7 +50,7 @@ function extractCells(
       const srcWidth = cellWidth - 2 * marginX;
       const srcHeight = cellHeight - 2 * marginY;
 
-      const scale = Math.max(1, targetSize / Math.min(srcWidth, srcHeight));
+      const scale = Math.max(1, OCR_TARGET_CELL_SIZE / Math.min(srcWidth, srcHeight));
       const cellCanvas = adapter.createCanvas(
         Math.round(srcWidth * scale),
         Math.round(srcHeight * scale)
@@ -111,10 +116,10 @@ function processForOCR(
 ): CanvasLike {
   // Enhance contrast
   const imageData = adapter.getImageData(cellCanvas, 0, 0, cellCanvas.width, cellCanvas.height);
-  const enhanced = enhanceContrast(imageData, 1.5);
+  const enhanced = enhanceContrast(imageData, OCR_CONTRAST_FACTOR);
 
   // Binarize
-  let processed = binarize(enhanced, 160);
+  let processed = binarize(enhanced, OCR_BINARIZE_THRESHOLD);
 
   // Optionally apply dilation to thicken thin strokes
   if (useDilation) {
@@ -126,7 +131,7 @@ function processForOCR(
   adapter.putImageData(processedCanvas, processed, 0, 0);
 
   // Add padding
-  return addPadding(adapter, processedCanvas, 20);
+  return addPadding(adapter, processedCanvas, OCR_CELL_PADDING);
 }
 
 /**
@@ -209,8 +214,8 @@ async function recognizeCells(
           finalConfidence = dilatedConfidence;
         }
       }
-    } catch {
-      // OCR failed for this cell
+    } catch (error) {
+      console.warn(`OCR failed for cell ${i} (row ${row}, col ${col}):`, error);
     }
 
     results.push({
@@ -388,44 +393,6 @@ export async function extractCellImages(
   const sourceCanvas = adapter.createCanvas(width, height);
   adapter.drawImage(sourceCanvas, image, 0, 0, width, height, 0, 0, width, height);
 
-  const cellWidth = width / 9;
-  const cellHeight = height / 9;
-  const marginX = cellWidth * marginRatio;
-  const marginY = cellHeight * marginRatio;
-  const targetSize = 100;
-
-  const cellImages: string[] = [];
-
-  for (let row = 0; row < 9; row++) {
-    for (let col = 0; col < 9; col++) {
-      const srcX = col * cellWidth + marginX;
-      const srcY = row * cellHeight + marginY;
-      const srcWidth = cellWidth - 2 * marginX;
-      const srcHeight = cellHeight - 2 * marginY;
-
-      const scale = Math.max(1, targetSize / Math.min(srcWidth, srcHeight));
-      const cellCanvas = adapter.createCanvas(
-        Math.round(srcWidth * scale),
-        Math.round(srcHeight * scale)
-      );
-
-      adapter.fillRect(cellCanvas, 'white', 0, 0, cellCanvas.width, cellCanvas.height);
-      adapter.drawImage(
-        cellCanvas,
-        sourceCanvas,
-        srcX,
-        srcY,
-        srcWidth,
-        srcHeight,
-        0,
-        0,
-        cellCanvas.width,
-        cellCanvas.height
-      );
-
-      cellImages.push(adapter.toDataURL(cellCanvas));
-    }
-  }
-
-  return cellImages;
+  const cells = extractCells(adapter, sourceCanvas, marginRatio);
+  return cells.map((cell) => adapter.toDataURL(cell));
 }

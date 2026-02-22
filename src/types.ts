@@ -51,6 +51,18 @@ export const DEFAULT_OCR_CONFIG: OCRConfig = {
   skipBoardDetection: false,
 };
 
+/** Target size in pixels for extracted cell images */
+export const OCR_TARGET_CELL_SIZE = 100;
+
+/** Padding in pixels added around cells for OCR */
+export const OCR_CELL_PADDING = 20;
+
+/** Threshold for binarization (0-255) */
+export const OCR_BINARIZE_THRESHOLD = 160;
+
+/** Contrast enhancement factor */
+export const OCR_CONTRAST_FACTOR = 1.5;
+
 /** Rectangle bounds */
 export interface Rectangle {
   left: number;
