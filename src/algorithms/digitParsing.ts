@@ -35,8 +35,11 @@ const CORRECTIONS: Record<string, number> = {
 };
 
 /**
- * Parse a digit (1-9) from OCR text
- * Returns null if no valid digit found
+ * Parse a Sudoku digit (1-9) from OCR-recognized text.
+ * Attempts three strategies: (1) direct single-digit match, (2) find any digit
+ * in the text, (3) apply common OCR character corrections (e.g., 'l'->1, 'O'->9).
+ * @param text - Raw OCR text output for a single cell
+ * @returns The recognized digit (1-9), or null if no valid digit found
  */
 export function parseDigitFromText(text: string): number | null {
   const cleanText = text.trim();

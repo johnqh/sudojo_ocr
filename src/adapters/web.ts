@@ -24,7 +24,9 @@ function getContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
 }
 
 /**
- * Browser/Web canvas adapter implementation
+ * Browser/Web canvas adapter implementation.
+ * Uses HTMLCanvasElement and CanvasRenderingContext2D for all operations.
+ * Supports loading from File, Blob, HTMLImageElement, HTMLCanvasElement, or data URL string.
  */
 export class WebCanvasAdapter implements CanvasAdapter {
   createCanvas(width: number, height: number): WebCanvas {
@@ -145,7 +147,9 @@ export class WebCanvasAdapter implements CanvasAdapter {
 }
 
 /**
- * Create a web canvas adapter
+ * Create a web/browser canvas adapter.
+ * Synchronous - no initialization needed.
+ * @returns A CanvasAdapter using HTMLCanvasElement for browser environments
  */
 export function createWebAdapter(): CanvasAdapter {
   return new WebCanvasAdapter();

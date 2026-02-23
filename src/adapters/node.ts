@@ -66,7 +66,10 @@ async function getCanvasModule(): Promise<NapiCanvasModule> {
 }
 
 /**
- * Node.js canvas adapter implementation
+ * Node.js canvas adapter implementation.
+ * Uses @napi-rs/canvas for server-side canvas operations.
+ * Must be initialized before use via init() or by using createNodeAdapter() factory.
+ * Supports loading from Buffer or file path string.
  */
 export class NodeCanvasAdapter implements CanvasAdapter {
   private module: NapiCanvasModule | null = null;
@@ -181,7 +184,9 @@ export class NodeCanvasAdapter implements CanvasAdapter {
 }
 
 /**
- * Create and initialize a node canvas adapter
+ * Create and initialize a Node.js canvas adapter.
+ * Asynchronously loads the @napi-rs/canvas module.
+ * @returns A promise resolving to a fully initialized CanvasAdapter for Node.js
  */
 export async function createNodeAdapter(): Promise<CanvasAdapter> {
   const adapter = new NodeCanvasAdapter();

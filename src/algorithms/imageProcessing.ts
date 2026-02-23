@@ -13,7 +13,10 @@ function safeGet(arr: Uint8Array | Uint8ClampedArray, index: number): number {
 }
 
 /**
- * Convert image data to grayscale array
+ * Convert RGBA image data to a grayscale intensity array.
+ * Uses luminance formula: 0.299*R + 0.587*G + 0.114*B
+ * @param imageData - Source RGBA image data
+ * @returns Uint8Array of grayscale values (0-255), one per pixel
  */
 export function toGrayscale(imageData: ImageDataLike): Uint8Array {
   const { data, width, height } = imageData;
@@ -32,7 +35,12 @@ export function toGrayscale(imageData: ImageDataLike): Uint8Array {
 }
 
 /**
- * Apply 3x3 Gaussian blur
+ * Apply a 3x3 Gaussian blur kernel to reduce noise in grayscale data.
+ * Uses kernel [1,2,1; 2,4,2; 1,2,1] with sum 16.
+ * @param gray - Grayscale pixel array
+ * @param width - Image width in pixels
+ * @param height - Image height in pixels
+ * @returns Blurred grayscale array (border pixels are zeroed)
  */
 export function gaussianBlur(
   gray: Uint8Array,
@@ -61,7 +69,13 @@ export function gaussianBlur(
 }
 
 /**
- * Canny-like edge detection using Sobel operators
+ * Canny-like edge detection using Sobel gradient operators.
+ * Computes gradient magnitude from horizontal and vertical Sobel filters,
+ * then thresholds at 20% of the maximum magnitude.
+ * @param gray - Grayscale pixel array
+ * @param width - Image width in pixels
+ * @param height - Image height in pixels
+ * @returns Binary edge map (0 or 255 per pixel)
  */
 export function cannyEdgeDetection(
   gray: Uint8Array,
@@ -104,7 +118,11 @@ export function cannyEdgeDetection(
 }
 
 /**
- * Enhance contrast for better OCR
+ * Enhance image contrast by stretching pixel values around the average brightness.
+ * Formula: newVal = avgBrightness + (val - avgBrightness) * factor
+ * @param imageData - Source RGBA image data
+ * @param factor - Contrast multiplier (default: 1.5). Values > 1 increase contrast.
+ * @returns New ImageDataLike with enhanced contrast (alpha preserved)
  */
 export function enhanceContrast(
   imageData: ImageDataLike,
@@ -137,7 +155,11 @@ export function enhanceContrast(
 }
 
 /**
- * Binarize image (convert to black and white)
+ * Binarize image to black and white using a global luminance threshold.
+ * Pixels below the threshold become black (0), above become white (255).
+ * @param imageData - Source RGBA image data
+ * @param threshold - Luminance cutoff value 0-255 (default: 160)
+ * @returns New ImageDataLike with only black or white pixels (alpha preserved)
  */
 export function binarize(
   imageData: ImageDataLike,
@@ -162,7 +184,11 @@ export function binarize(
 }
 
 /**
- * Preprocess image for OCR - contrast stretching with gamma correction
+ * Preprocess image for OCR using contrast stretching with gamma correction.
+ * Stretches pixel range to full 0-255, then applies gamma correction (gamma=0.8)
+ * to brighten midtones while preserving dark digits.
+ * @param imageData - Source RGBA image data
+ * @returns Preprocessed ImageDataLike optimized for OCR recognition
  */
 export function preprocessForOCR(imageData: ImageDataLike): ImageDataLike {
   const { data, width, height } = imageData;
@@ -208,9 +234,11 @@ export function preprocessForOCR(imageData: ImageDataLike): ImageDataLike {
 }
 
 /**
- * Morphological dilation - thickens black regions (digits)
- * Uses a 3x3 structuring element
- * Useful for thin strokes that OCR struggles to recognize
+ * Morphological dilation to thicken dark regions (digits).
+ * Uses a 3x3 structuring element: if any neighbor is black, the pixel becomes black.
+ * Useful for thin strokes (8s, 9s) that OCR struggles to recognize.
+ * @param imageData - Source RGBA image data (should be binarized first)
+ * @returns New ImageDataLike with expanded black regions
  */
 export function dilate(imageData: ImageDataLike): ImageDataLike {
   const { data, width, height } = imageData;
@@ -249,7 +277,11 @@ export function dilate(imageData: ImageDataLike): ImageDataLike {
 }
 
 /**
- * Check if a cell is empty based on standard deviation
+ * Determine if a cell is empty based on pixel standard deviation.
+ * Empty cells have uniform color (low stdDev < 8), while cells with
+ * digits have significant brightness variation.
+ * @param imageData - Cell image data to analyze
+ * @returns true if the cell appears empty (no digit present)
  */
 export function isCellEmpty(imageData: ImageDataLike): boolean {
   const { data, width, height } = imageData;

@@ -282,7 +282,13 @@ function findRectangleLowThreshold(
 }
 
 /**
- * Fallback using dark pixel detection
+ * Fallback board detection using dark pixel density scanning.
+ * Scans from each edge inward to find the first row/column with
+ * significant dark pixel content (>10% of pixels below threshold 200).
+ * @param gray - Grayscale pixel array
+ * @param width - Image width in pixels
+ * @param height - Image height in pixels
+ * @returns Rectangle bounds of the detected dark content region
  */
 export function findRectangleDarkPixels(
   gray: Uint8Array,
@@ -344,8 +350,12 @@ export function findRectangleDarkPixels(
 }
 
 /**
- * Detect the Sudoku board rectangle in an image
- * Returns the bounding rectangle or null if detection fails
+ * Detect the Sudoku board rectangle in an image using multi-level detection.
+ * Tries three strategies in order: (1) line-based rectangle detection using
+ * Canny edges, (2) edge density fallback, (3) dark pixel scanning fallback.
+ * Prefers square-shaped rectangles as Sudoku grids are always square.
+ * @param imageData - Source RGBA image data
+ * @returns Bounding rectangle of the detected board, or null if all methods fail
  */
 export function detectBoardRectangle(imageData: ImageDataLike): Rectangle | null {
   const { width, height } = imageData;
@@ -393,7 +403,10 @@ export function detectBoardRectangle(imageData: ImageDataLike): Rectangle | null
 }
 
 /**
- * Make a rectangle square by centering
+ * Convert a rectangle to a centered square by trimming the longer dimension.
+ * Uses the shorter side as the square size and centers the crop.
+ * @param rect - Input rectangle bounds
+ * @returns Object with x, y (top-left corner) and size of the centered square
  */
 export function squarifyRectangle(rect: Rectangle): {
   x: number;
