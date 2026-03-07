@@ -229,15 +229,6 @@ const result = await extractSudokuFromImage(
 2. Export from `algorithms/index.ts`
 3. Export from main `index.ts` if public API
 
-## Testing
-
-Tests use Vitest. Run with `bun run test`.
-
-Test files:
-- `src/algorithms/imageProcessing.test.ts` - Image processing unit tests
-- `src/algorithms/boardDetection.test.ts` - Board detection unit tests
-- `src/algorithms/digitParsing.test.ts` - Digit parsing unit tests
-
 ## Related Projects
 
 - `sudojo_app` - Web application (uses web adapter)
