@@ -233,7 +233,6 @@ async function recognizeCells(
       const enhanced = enhanceContrast(cellImageData, OCR_CONTRAST_FACTOR);
       const binarized = binarize(enhanced, OCR_BINARIZE_THRESHOLD);
       // Remove grid line remnants — depth-limited + min border run length
-      // to preserve thin pencilmarks (digit 1) that touch the border
       const cleaned = removeGridLines(binarized, 3, 3);
       const classification = classifyCellContent(cleaned);
 
@@ -375,7 +374,7 @@ export async function extractSudokuFromImage(
     processedCanvas = croppedCanvas;
   }
 
-  // Extract cells — use smaller margin for pencilmark mode to preserve corner pencilmarks
+  // Extract cells — minimal margin for pencilmark mode; removeGridLines handles the rest
   const cellMargin = cfg.recognizePencilmarks
     ? Math.min(cfg.cellMargin, OCR_PENCILMARK_CELL_MARGIN)
     : cfg.cellMargin;
