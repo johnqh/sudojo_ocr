@@ -19,6 +19,7 @@
         "vitest": "^4.0.15",
       },
       "peerDependencies": {
+        "@sudobility/sudojo_types": "^1.2.37",
         "tesseract.js": "^5.0.0 || ^6.0.0 || ^7.0.0",
       },
     },
@@ -183,6 +184,10 @@
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.57.0", "", { "os": "win32", "cpu": "x64" }, "sha512-Zv7v6q6aV+VslnpwzqKAmrk5JdVkLUzok2208ZXGipjb+msxBr/fJPZyeEXiFgH7k62Ak0SLIfxQRZQvTuf7rQ=="],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
+
+    "@sudobility/sudojo_types": ["@sudobility/sudojo_types@1.2.36", "", { "peerDependencies": { "@sudobility/types": "^1.9.55" } }, "sha512-LiVcFv6y/u/l6ll+PNwNIlvMbLfsLF4hNHHx77U77O7hNj8Ig9asMrzoo1e67ZFbF/MJIoLloBJpqumU8739MQ=="],
+
+    "@sudobility/types": ["@sudobility/types@1.9.57", "", {}, "sha512-POtx/cRagDEdnEwrXfuoyzhNKyGahD7TYJRZT7WYW6+9ID1ZHwWDGkI88KmenKtwsljiJPQZ9+QM7jy13hdv3g=="],
 
     "@types/chai": ["@types/chai@5.2.3", "", { "dependencies": { "@types/deep-eql": "*", "assertion-error": "^2.0.1" } }, "sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA=="],
 

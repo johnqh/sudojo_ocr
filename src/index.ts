@@ -27,7 +27,6 @@
 export type {
   OCRProgress,
   OCRResult,
-  CellOCRResult,
   OCRConfig,
   Rectangle,
   CanvasAdapter,
@@ -56,4 +55,8 @@ export {
   findRectangleDarkPixels,
   squarifyRectangle,
   parseDigitFromText,
+  findConnectedComponents,
+  classifyCellContent,
+  isPencilmarkPresent,
 } from './algorithms/index.js';
+export type { ConnectedComponent, CellContentType } from './algorithms/index.js';

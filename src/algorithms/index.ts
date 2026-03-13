@@ -20,3 +20,10 @@ export {
 } from './boardDetection.js';
 
 export { parseDigitFromText } from './digitParsing.js';
+
+export {
+  findConnectedComponents,
+  classifyCellContent,
+  isPencilmarkPresent,
+} from './cellClassification.js';
+export type { ConnectedComponent, CellContentType } from './cellClassification.js';

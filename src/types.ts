@@ -2,6 +2,8 @@
  * OCR Types for Sudoku puzzle scanning
  */
 
+import type { SolverBoard } from '@sudobility/sudojo_types';
+
 /** Progress callback data */
 export interface OCRProgress {
   status: 'loading' | 'recognizing' | 'processing' | 'complete' | 'error';
@@ -11,24 +13,12 @@ export interface OCRProgress {
 
 /** Final OCR result */
 export interface OCRResult {
-  /** 81-character puzzle string (0 for empty cells) */
-  puzzle: string;
+  /** Recognized board with puzzle string and pencilmark data */
+  board: SolverBoard;
   /** Average confidence 0-100 */
   confidence: number;
   /** Number of digits recognized */
   digitCount: number;
-  /** Per-cell OCR results */
-  cellResults: CellOCRResult[];
-}
-
-/** Per-cell OCR result */
-export interface CellOCRResult {
-  index: number;
-  row: number;
-  column: number;
-  digit: number | null;
-  confidence: number;
-  text: string;
 }
 
 /** OCR configuration */
@@ -41,6 +31,8 @@ export interface OCRConfig {
   preprocess: boolean;
   /** Skip board detection - use when image is already cropped. Default: false */
   skipBoardDetection: boolean;
+  /** Detect pencilmarks (small candidate digits) in cells. Default: false */
+  recognizePencilmarks: boolean;
 }
 
 /** Default OCR configuration */
@@ -49,6 +41,7 @@ export const DEFAULT_OCR_CONFIG: OCRConfig = {
   minConfidence: 1,
   preprocess: true,
   skipBoardDetection: false,
+  recognizePencilmarks: false,
 };
 
 /** Target size in pixels for extracted cell images */
@@ -62,6 +55,9 @@ export const OCR_BINARIZE_THRESHOLD = 160;
 
 /** Contrast enhancement factor */
 export const OCR_CONTRAST_FACTOR = 1.5;
+
+/** Minimum dark pixel ratio to consider a pencilmark present in a sub-cell */
+export const OCR_PENCILMARK_MIN_INK_RATIO = 0.03;
 
 /** Rectangle bounds */
 export interface Rectangle {

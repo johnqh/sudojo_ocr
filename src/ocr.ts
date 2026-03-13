@@ -7,7 +7,6 @@ import type {
   CanvasLike,
   OCRConfig,
   OCRResult,
-  CellOCRResult,
   OCRProgress,
   TesseractModule,
 } from './types.js';
@@ -27,6 +26,8 @@ import {
   dilate,
   isCellEmpty,
   parseDigitFromText,
+  classifyCellContent,
+  isPencilmarkPresent,
 } from './algorithms/index.js';
 
 /**
@@ -135,16 +136,69 @@ function processForOCR(
 }
 
 /**
- * Run OCR on all cells
+ * Detect pencilmark digits in a cell by dividing it into a 3x3 grid
+ * and checking ink presence in each sub-cell.
+ * The digit is inferred from position (1-9, row-major order).
+ * @returns Sorted array of detected digit numbers (e.g., [1, 3, 7])
+ */
+function detectPencilmarks(adapter: CanvasAdapter, cellCanvas: CanvasLike): number[] {
+  const digits: number[] = [];
+  const subWidth = Math.floor(cellCanvas.width / 3);
+  const subHeight = Math.floor(cellCanvas.height / 3);
+
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 3; col++) {
+      const digit = row * 3 + col + 1;
+
+      const sx = col * subWidth;
+      const sy = row * subHeight;
+
+      const subCanvas = adapter.createCanvas(subWidth, subHeight);
+      adapter.fillRect(subCanvas, 'white', 0, 0, subWidth, subHeight);
+      adapter.drawImage(
+        subCanvas,
+        cellCanvas,
+        sx,
+        sy,
+        subWidth,
+        subHeight,
+        0,
+        0,
+        subWidth,
+        subHeight
+      );
+
+      const subImageData = adapter.getImageData(subCanvas, 0, 0, subWidth, subHeight);
+
+      if (isPencilmarkPresent(subImageData)) {
+        digits.push(digit);
+      }
+    }
+  }
+
+  return digits;
+}
+
+/** Per-cell recognition result (internal only) */
+interface CellRecognition {
+  digit: number | null;
+  confidence: number;
+}
+
+/**
+ * Run OCR on all cells.
+ * Returns per-cell digits/confidence and pencilmark digits (when enabled).
  */
 async function recognizeCells(
   adapter: CanvasAdapter,
   cells: CanvasLike[],
   minConfidence: number,
   tesseract: TesseractModule,
+  recognizePencilmarks: boolean = false,
   onProgress?: (progress: number) => void
-): Promise<CellOCRResult[]> {
-  const results: CellOCRResult[] = [];
+): Promise<{ cells: CellRecognition[]; pencilmarkDigits: string[] }> {
+  const results: CellRecognition[] = [];
+  const pencilmarkDigits: string[] = new Array(cells.length).fill('');
 
   const worker = await tesseract.createWorker('eng', 1, {
     logger: () => {},
@@ -163,34 +217,41 @@ async function recognizeCells(
     // Check if cell is empty
     const cellImageData = adapter.getImageData(cell, 0, 0, cell.width, cell.height);
     if (isCellEmpty(cellImageData)) {
-      results.push({
-        index: i,
-        row,
-        column: col,
-        digit: null,
-        confidence: 100,
-        text: '',
-      });
+      results.push({ digit: null, confidence: 100 });
       onProgress?.(((i + 1) / cells.length) * 100);
       continue;
+    }
+
+    // When pencilmark recognition is enabled, classify cell content first
+    if (recognizePencilmarks) {
+      const enhanced = enhanceContrast(cellImageData, OCR_CONTRAST_FACTOR);
+      const binarized = binarize(enhanced, OCR_BINARIZE_THRESHOLD);
+      const classification = classifyCellContent(binarized);
+
+      if (classification === 'pencilmarks') {
+        const binarizedCanvas = adapter.createCanvas(cell.width, cell.height);
+        adapter.putImageData(binarizedCanvas, binarized, 0, 0);
+
+        const digits = detectPencilmarks(adapter, binarizedCanvas);
+        pencilmarkDigits[i] = digits.join('');
+        results.push({ digit: null, confidence: 0 });
+        onProgress?.(((i + 1) / cells.length) * 100);
+        continue;
+      }
     }
 
     // Process cell for OCR
     const processedCell = processForOCR(adapter, cell);
 
     let digit: number | null = null;
-    let finalConfidence = 0;
-    let finalText = '';
+    let confidence = 0;
 
     try {
       const tesseractInput = adapter.toTesseractInput(processedCell);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data } = await worker.recognize(tesseractInput as any);
       const text = data.text.trim();
-      const confidence = data.confidence || 0;
-
-      finalText = text;
-      finalConfidence = confidence;
+      confidence = data.confidence || 0;
 
       const parsedDigit = parseDigitFromText(text);
       if (parsedDigit !== null && confidence >= minConfidence) {
@@ -210,29 +271,20 @@ async function recognizeCells(
         const dilatedDigit = parseDigitFromText(dilatedText);
         if (dilatedDigit !== null && dilatedConfidence >= minConfidence) {
           digit = dilatedDigit;
-          finalText = dilatedText;
-          finalConfidence = dilatedConfidence;
+          confidence = dilatedConfidence;
         }
       }
     } catch (error) {
       console.warn(`OCR failed for cell ${i} (row ${row}, col ${col}):`, error);
     }
 
-    results.push({
-      index: i,
-      row,
-      column: col,
-      digit,
-      confidence: finalConfidence,
-      text: finalText,
-    });
-
+    results.push({ digit, confidence });
     onProgress?.(((i + 1) / cells.length) * 100);
   }
 
   await worker.terminate();
 
-  return results;
+  return { cells: results, pencilmarkDigits };
 }
 
 /**
@@ -312,17 +364,19 @@ export async function extractSudokuFromImage(
   });
 
   // Run OCR
-  const cellResults = await recognizeCells(
+  const { cells: cellResults, pencilmarkDigits } = await recognizeCells(
     adapter,
     cells,
     cfg.minConfidence,
     tesseract,
+    cfg.recognizePencilmarks,
     (cellProgress) => {
       const overallProgress = 20 + cellProgress * 0.75;
+      const action = cfg.recognizePencilmarks ? 'Analyzing' : 'Recognizing';
       onProgress?.({
         status: 'recognizing',
         progress: overallProgress,
-        message: `Recognizing cell ${Math.floor((cellProgress * 81) / 100) + 1}/81...`,
+        message: `${action} cell ${Math.floor((cellProgress * 81) / 100) + 1}/81...`,
       });
     }
   );
@@ -331,19 +385,27 @@ export async function extractSudokuFromImage(
 
   // Build result
   const puzzle = cellResults.map((r) => r.digit ?? 0).join('');
-  const recognizedCells = cellResults.filter((r) => r.digit !== null);
+  const recognized = cellResults.filter((r) => r.digit !== null);
   const avgConfidence =
-    recognizedCells.length > 0
-      ? recognizedCells.reduce((sum, r) => sum + r.confidence, 0) / recognizedCells.length
+    recognized.length > 0
+      ? recognized.reduce((sum, r) => sum + r.confidence, 0) / recognized.length
       : 0;
+
+  const hasPencilmarks = pencilmarkDigits.some((d) => d.length > 0);
 
   onProgress?.({ status: 'complete', progress: 100, message: 'Complete' });
 
   return {
-    puzzle,
+    board: {
+      original: puzzle,
+      user: puzzle,
+      pencilmark: {
+        autopencil: hasPencilmarks,
+        numbers: pencilmarkDigits.join(','),
+      },
+    },
     confidence: avgConfidence,
-    digitCount: recognizedCells.length,
-    cellResults,
+    digitCount: recognized.length,
   };
 }
 
