@@ -7,6 +7,7 @@ import {
   binarize,
   preprocessForOCR,
   isCellEmpty,
+  removeGridLines,
 } from './imageProcessing.js';
 import type { ImageDataLike } from '../types.js';
 
@@ -204,5 +205,112 @@ describe('isCellEmpty', () => {
     }
     const imageData: ImageDataLike = { data, width: 10, height: 10 };
     expect(isCellEmpty(imageData)).toBe(false);
+  });
+});
+
+describe('removeGridLines', () => {
+  /**
+   * Helper to create a binarized image with specific dark pixel positions.
+   * All pixels start white; darkPixels specifies [x, y] positions to set black.
+   */
+  function createBinarizedImage(
+    width: number,
+    height: number,
+    darkPixels: [number, number][]
+  ): ImageDataLike {
+    const data = new Uint8ClampedArray(width * height * 4);
+    // Fill white
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = 255;
+      data[i + 1] = 255;
+      data[i + 2] = 255;
+      data[i + 3] = 255;
+    }
+    // Set dark pixels
+    for (const [x, y] of darkPixels) {
+      const idx = (y * width + x) * 4;
+      data[idx] = 0;
+      data[idx + 1] = 0;
+      data[idx + 2] = 0;
+    }
+    return { data, width, height };
+  }
+
+  function isDark(imageData: ImageDataLike, x: number, y: number): boolean {
+    const idx = (y * imageData.width + x) * 4;
+    return (imageData.data[idx] ?? 255) < 128;
+  }
+
+  it('should remove dark pixels on the border', () => {
+    // Dark pixel at (0, 5) — left border
+    const img = createBinarizedImage(10, 10, [[0, 5]]);
+    const result = removeGridLines(img);
+    expect(isDark(result, 0, 5)).toBe(false);
+  });
+
+  it('should remove dark pixels connected to the border', () => {
+    // A line of dark pixels from left border inward: (0,5), (1,5), (2,5)
+    const img = createBinarizedImage(10, 10, [
+      [0, 5], [1, 5], [2, 5],
+    ]);
+    const result = removeGridLines(img);
+    expect(isDark(result, 0, 5)).toBe(false);
+    expect(isDark(result, 1, 5)).toBe(false);
+    expect(isDark(result, 2, 5)).toBe(false);
+  });
+
+  it('should preserve interior dark pixels not connected to border', () => {
+    // Interior blob at center (5,5)
+    const img = createBinarizedImage(10, 10, [[5, 5]]);
+    const result = removeGridLines(img);
+    expect(isDark(result, 5, 5)).toBe(true);
+  });
+
+  it('should remove grid line on top border while preserving interior digit', () => {
+    // Top border line: y=0, x=0..9
+    const borderPixels: [number, number][] = [];
+    for (let x = 0; x < 10; x++) {
+      borderPixels.push([x, 0]);
+    }
+    // Interior digit blob
+    const interiorPixels: [number, number][] = [
+      [4, 4], [5, 4], [4, 5], [5, 5],
+    ];
+    const img = createBinarizedImage(10, 10, [...borderPixels, ...interiorPixels]);
+    const result = removeGridLines(img);
+
+    // Border line should be removed
+    for (let x = 0; x < 10; x++) {
+      expect(isDark(result, x, 0)).toBe(false);
+    }
+    // Interior digit should be preserved
+    expect(isDark(result, 4, 4)).toBe(true);
+    expect(isDark(result, 5, 5)).toBe(true);
+  });
+
+  it('should handle all-white image', () => {
+    const img = createBinarizedImage(10, 10, []);
+    const result = removeGridLines(img);
+    // No dark pixels to remove, should be identical
+    for (let i = 0; i < result.data.length; i += 4) {
+      expect(result.data[i]).toBe(255);
+    }
+  });
+
+  it('should remove L-shaped grid line touching corner', () => {
+    // L-shaped line: left border + bottom border
+    const pixels: [number, number][] = [];
+    for (let y = 0; y < 10; y++) pixels.push([0, y]); // left border
+    for (let x = 0; x < 10; x++) pixels.push([x, 9]); // bottom border
+    // Interior pixel
+    pixels.push([5, 5]);
+    const img = createBinarizedImage(10, 10, pixels);
+    const result = removeGridLines(img);
+
+    // L-shaped border lines removed
+    expect(isDark(result, 0, 3)).toBe(false);
+    expect(isDark(result, 3, 9)).toBe(false);
+    // Interior preserved
+    expect(isDark(result, 5, 5)).toBe(true);
   });
 });

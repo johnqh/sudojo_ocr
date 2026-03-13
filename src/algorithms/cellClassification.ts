@@ -4,7 +4,6 @@
  */
 
 import type { ImageDataLike } from '../types.js';
-import { OCR_PENCILMARK_MIN_INK_RATIO } from '../types.js';
 
 /** Bounding box and pixel count for a connected component */
 export interface ConnectedComponent {
@@ -20,11 +19,15 @@ export type CellContentType = 'digit' | 'pencilmarks' | 'empty';
 
 /**
  * Find connected components of dark pixels using flood-fill.
- * Components with fewer than 4 pixels are filtered out as noise.
+ * Components with fewer than minPixels are filtered out as noise.
  * @param imageData - Binarized RGBA image data
+ * @param minPixels - Minimum pixels for a component to be kept (default: 4)
  * @returns Array of connected components with bounding boxes
  */
-export function findConnectedComponents(imageData: ImageDataLike): ConnectedComponent[] {
+export function findConnectedComponents(
+  imageData: ImageDataLike,
+  minPixels: number = 4
+): ConnectedComponent[] {
   const { data, width, height } = imageData;
   const visited = new Uint8Array(width * height);
   const components: ConnectedComponent[] = [];
@@ -77,8 +80,8 @@ export function findConnectedComponents(imageData: ImageDataLike): ConnectedComp
         }
       }
 
-      // Filter noise: components with fewer than 4 pixels
-      if (component.pixelCount >= 4) {
+      // Filter noise: components with fewer than minPixels
+      if (component.pixelCount >= minPixels) {
         components.push(component);
       }
     }
@@ -134,20 +137,14 @@ export function classifyCellContent(imageData: ImageDataLike): CellContentType {
 }
 
 /**
- * Check if a pencilmark is present in a sub-cell region by measuring ink density.
+ * Check if a pencilmark is present in a sub-cell region using connected
+ * component analysis. More robust than ink density for thin strokes
+ * (e.g. digit 1) which form coherent shapes but have low pixel counts.
+ * Uses a lower min-pixel threshold (3) since sub-cells are small.
  * @param imageData - Binarized RGBA image data for a sub-cell region
- * @returns true if dark pixel ratio exceeds the minimum ink threshold
+ * @returns true if at least one connected component of 3+ pixels is found
  */
 export function isPencilmarkPresent(imageData: ImageDataLike): boolean {
-  const { data, width, height } = imageData;
-  const totalPixels = width * height;
-  let darkCount = 0;
-
-  for (let i = 0; i < data.length; i += 4) {
-    if ((data[i] ?? 255) < 128) {
-      darkCount++;
-    }
-  }
-
-  return darkCount / totalPixels > OCR_PENCILMARK_MIN_INK_RATIO;
+  const components = findConnectedComponents(imageData, 3);
+  return components.length > 0;
 }

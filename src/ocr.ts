@@ -16,6 +16,7 @@ import {
   OCR_CELL_PADDING,
   OCR_BINARIZE_THRESHOLD,
   OCR_CONTRAST_FACTOR,
+  OCR_PENCILMARK_CELL_MARGIN,
 } from './types.js';
 import {
   detectBoardRectangle,
@@ -28,6 +29,7 @@ import {
   parseDigitFromText,
   classifyCellContent,
   isPencilmarkPresent,
+  removeGridLines,
 } from './algorithms/index.js';
 
 /**
@@ -138,6 +140,7 @@ function processForOCR(
 /**
  * Detect pencilmark digits in a cell by dividing it into a 3x3 grid
  * and checking ink presence in each sub-cell.
+ * Sub-cells are expanded by 15% overlap to catch pencilmarks near boundaries.
  * The digit is inferred from position (1-9, row-major order).
  * @returns Sorted array of detected digit numbers (e.g., [1, 3, 7])
  */
@@ -145,30 +148,37 @@ function detectPencilmarks(adapter: CanvasAdapter, cellCanvas: CanvasLike): numb
   const digits: number[] = [];
   const subWidth = Math.floor(cellCanvas.width / 3);
   const subHeight = Math.floor(cellCanvas.height / 3);
+  const overlapX = Math.floor(subWidth * 0.15);
+  const overlapY = Math.floor(subHeight * 0.15);
 
   for (let row = 0; row < 3; row++) {
     for (let col = 0; col < 3; col++) {
       const digit = row * 3 + col + 1;
 
-      const sx = col * subWidth;
-      const sy = row * subHeight;
+      // Expand sub-cell with overlap, clamped to cell bounds
+      const sx = Math.max(0, col * subWidth - overlapX);
+      const sy = Math.max(0, row * subHeight - overlapY);
+      const ex = Math.min(cellCanvas.width, (col + 1) * subWidth + overlapX);
+      const ey = Math.min(cellCanvas.height, (row + 1) * subHeight + overlapY);
+      const sw = ex - sx;
+      const sh = ey - sy;
 
-      const subCanvas = adapter.createCanvas(subWidth, subHeight);
-      adapter.fillRect(subCanvas, 'white', 0, 0, subWidth, subHeight);
+      const subCanvas = adapter.createCanvas(sw, sh);
+      adapter.fillRect(subCanvas, 'white', 0, 0, sw, sh);
       adapter.drawImage(
         subCanvas,
         cellCanvas,
         sx,
         sy,
-        subWidth,
-        subHeight,
+        sw,
+        sh,
         0,
         0,
-        subWidth,
-        subHeight
+        sw,
+        sh
       );
 
-      const subImageData = adapter.getImageData(subCanvas, 0, 0, subWidth, subHeight);
+      const subImageData = adapter.getImageData(subCanvas, 0, 0, sw, sh);
 
       if (isPencilmarkPresent(subImageData)) {
         digits.push(digit);
@@ -222,7 +232,9 @@ async function recognizeCells(
     if (recognizePencilmarks) {
       const enhanced = enhanceContrast(cellImageData, OCR_CONTRAST_FACTOR);
       const binarized = binarize(enhanced, OCR_BINARIZE_THRESHOLD);
-      const classification = classifyCellContent(binarized);
+      // Remove grid line remnants (dark pixels connected to cell borders)
+      const cleaned = removeGridLines(binarized);
+      const classification = classifyCellContent(cleaned);
 
       if (classification === 'empty') {
         results.push({ digit: null, confidence: 100 });
@@ -232,7 +244,7 @@ async function recognizeCells(
 
       if (classification === 'pencilmarks') {
         const binarizedCanvas = adapter.createCanvas(cell.width, cell.height);
-        adapter.putImageData(binarizedCanvas, binarized, 0, 0);
+        adapter.putImageData(binarizedCanvas, cleaned, 0, 0);
 
         const digits = detectPencilmarks(adapter, binarizedCanvas);
         pencilmarkDigits[i] = digits.join('');
@@ -362,8 +374,11 @@ export async function extractSudokuFromImage(
     processedCanvas = croppedCanvas;
   }
 
-  // Extract cells
-  const cells = extractCells(adapter, processedCanvas, cfg.cellMargin);
+  // Extract cells — use smaller margin for pencilmark mode to preserve corner pencilmarks
+  const cellMargin = cfg.recognizePencilmarks
+    ? Math.min(cfg.cellMargin, OCR_PENCILMARK_CELL_MARGIN)
+    : cfg.cellMargin;
+  const cells = extractCells(adapter, processedCanvas, cellMargin);
 
   onProgress?.({
     status: 'recognizing',

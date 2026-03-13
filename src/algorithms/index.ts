@@ -11,6 +11,7 @@ export {
   dilate,
   preprocessForOCR,
   isCellEmpty,
+  removeGridLines,
 } from './imageProcessing.js';
 
 export {

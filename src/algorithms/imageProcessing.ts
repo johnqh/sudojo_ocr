@@ -277,6 +277,94 @@ export function dilate(imageData: ImageDataLike): ImageDataLike {
 }
 
 /**
+ * Remove grid lines from a binarized cell image.
+ * Grid lines are dark pixel components that touch the cell border.
+ * Pencilmarks and digits are interior and don't touch edges.
+ *
+ * Algorithm: Flood-fill from all dark border pixels, setting
+ * connected dark pixels to white.
+ *
+ * @param imageData - Binarized RGBA image data
+ * @returns New ImageDataLike with grid lines removed
+ */
+export function removeGridLines(imageData: ImageDataLike): ImageDataLike {
+  const { data, width, height } = imageData;
+  const newData = new Uint8ClampedArray(data.length);
+
+  for (let i = 0; i < data.length; i++) {
+    newData[i] = safeGet(data, i);
+  }
+
+  const toRemove = new Uint8Array(width * height);
+
+  function isDark(x: number, y: number): boolean {
+    if (x < 0 || x >= width || y < 0 || y >= height) return false;
+    const idx = (y * width + x) * 4;
+    return (newData[idx] ?? 255) < 128;
+  }
+
+  // Collect all dark border pixels as flood-fill seeds
+  const stack: [number, number][] = [];
+
+  for (let x = 0; x < width; x++) {
+    if (isDark(x, 0)) {
+      toRemove[x] = 1;
+      stack.push([x, 0]);
+    }
+    const bottomIdx = (height - 1) * width + x;
+    if (isDark(x, height - 1)) {
+      toRemove[bottomIdx] = 1;
+      stack.push([x, height - 1]);
+    }
+  }
+
+  for (let y = 1; y < height - 1; y++) {
+    const leftIdx = y * width;
+    if (isDark(0, y) && !toRemove[leftIdx]) {
+      toRemove[leftIdx] = 1;
+      stack.push([0, y]);
+    }
+    const rightIdx = y * width + (width - 1);
+    if (isDark(width - 1, y) && !toRemove[rightIdx]) {
+      toRemove[rightIdx] = 1;
+      stack.push([width - 1, y]);
+    }
+  }
+
+  // Flood-fill from border dark pixels using 4-connectivity
+  while (stack.length > 0) {
+    const popped = stack.pop();
+    if (!popped) break;
+    const [cx, cy] = popped;
+
+    for (const [nx, ny] of [
+      [cx - 1, cy],
+      [cx + 1, cy],
+      [cx, cy - 1],
+      [cx, cy + 1],
+    ] as [number, number][]) {
+      if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+      const nIdx = ny * width + nx;
+      if (toRemove[nIdx] || !isDark(nx, ny)) continue;
+      toRemove[nIdx] = 1;
+      stack.push([nx, ny]);
+    }
+  }
+
+  // Set border-connected dark pixels to white
+  for (let i = 0; i < width * height; i++) {
+    if (toRemove[i]) {
+      const idx = i * 4;
+      newData[idx] = 255;
+      newData[idx + 1] = 255;
+      newData[idx + 2] = 255;
+    }
+  }
+
+  return { data: newData, width, height };
+}
+
+/**
  * Determine if a cell is empty based on pixel standard deviation.
  * Empty cells have uniform color (low stdDev < 8), while cells with
  * digits have significant brightness variation.

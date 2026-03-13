@@ -59,6 +59,9 @@ export const OCR_CONTRAST_FACTOR = 1.5;
 /** Minimum dark pixel ratio to consider a pencilmark present in a sub-cell */
 export const OCR_PENCILMARK_MIN_INK_RATIO = 0.03;
 
+/** Cell margin for pencilmark mode — small enough to preserve corner pencilmarks */
+export const OCR_PENCILMARK_CELL_MARGIN = 0.05;
+
 /** Rectangle bounds */
 export interface Rectangle {
   left: number;

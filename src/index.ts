@@ -58,5 +58,6 @@ export {
   findConnectedComponents,
   classifyCellContent,
   isPencilmarkPresent,
+  removeGridLines,
 } from './algorithms/index.js';
 export type { ConnectedComponent, CellContentType } from './algorithms/index.js';
