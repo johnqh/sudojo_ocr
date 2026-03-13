@@ -232,8 +232,9 @@ async function recognizeCells(
     if (recognizePencilmarks) {
       const enhanced = enhanceContrast(cellImageData, OCR_CONTRAST_FACTOR);
       const binarized = binarize(enhanced, OCR_BINARIZE_THRESHOLD);
-      // Remove grid line remnants (dark pixels connected to cell borders)
-      const cleaned = removeGridLines(binarized);
+      // Remove grid line remnants — depth-limited + min border run length
+      // to preserve thin pencilmarks (digit 1) that touch the border
+      const cleaned = removeGridLines(binarized, 3, 3);
       const classification = classifyCellContent(cleaned);
 
       if (classification === 'empty') {

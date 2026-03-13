@@ -281,13 +281,23 @@ export function dilate(imageData: ImageDataLike): ImageDataLike {
  * Grid lines are dark pixel components that touch the cell border.
  * Pencilmarks and digits are interior and don't touch edges.
  *
- * Algorithm: Flood-fill from all dark border pixels, setting
- * connected dark pixels to white.
+ * Algorithm: BFS flood-fill from all dark border pixels, setting
+ * connected dark pixels to white. When maxDepth is specified, only
+ * removes pixels within that many pixels of the border. When
+ * minBorderRun is specified, only seeds from consecutive dark border
+ * pixel runs of that length or longer (grid lines span the cell edge,
+ * while a pencilmark stroke touching the border is only 1-2px wide).
  *
  * @param imageData - Binarized RGBA image data
+ * @param maxDepth - Maximum flood-fill depth from border (undefined = unlimited)
+ * @param minBorderRun - Minimum consecutive dark pixels on a border edge to seed from (default: 1)
  * @returns New ImageDataLike with grid lines removed
  */
-export function removeGridLines(imageData: ImageDataLike): ImageDataLike {
+export function removeGridLines(
+  imageData: ImageDataLike,
+  maxDepth?: number,
+  minBorderRun: number = 1,
+): ImageDataLike {
   const { data, width, height } = imageData;
   const newData = new Uint8ClampedArray(data.length);
 
@@ -303,39 +313,70 @@ export function removeGridLines(imageData: ImageDataLike): ImageDataLike {
     return (newData[idx] ?? 255) < 128;
   }
 
-  // Collect all dark border pixels as flood-fill seeds
-  const stack: [number, number][] = [];
+  // BFS queue: [x, y, depth]
+  const queue: [number, number, number][] = [];
 
+  /**
+   * Find runs of consecutive dark pixels along a border edge and only
+   * seed from runs >= minBorderRun length.
+   */
+  function seedBorderEdge(
+    coords: [number, number][],
+  ): void {
+    let runStart = -1;
+    for (let i = 0; i <= coords.length; i++) {
+      const coord = coords[i];
+      const dark = coord ? isDark(coord[0], coord[1]) : false;
+      if (dark) {
+        if (runStart < 0) runStart = i;
+      } else {
+        if (runStart >= 0) {
+          const runLen = i - runStart;
+          if (runLen >= minBorderRun) {
+            for (let j = runStart; j < i; j++) {
+              const c = coords[j]!;
+              const idx = c[1] * width + c[0];
+              if (!toRemove[idx]) {
+                toRemove[idx] = 1;
+                queue.push([c[0], c[1], 0]);
+              }
+            }
+          }
+          runStart = -1;
+        }
+      }
+    }
+  }
+
+  // Top and bottom border edges (horizontal runs)
+  const topEdge: [number, number][] = [];
+  const bottomEdge: [number, number][] = [];
   for (let x = 0; x < width; x++) {
-    if (isDark(x, 0)) {
-      toRemove[x] = 1;
-      stack.push([x, 0]);
-    }
-    const bottomIdx = (height - 1) * width + x;
-    if (isDark(x, height - 1)) {
-      toRemove[bottomIdx] = 1;
-      stack.push([x, height - 1]);
-    }
+    topEdge.push([x, 0]);
+    bottomEdge.push([x, height - 1]);
   }
+  seedBorderEdge(topEdge);
+  seedBorderEdge(bottomEdge);
 
-  for (let y = 1; y < height - 1; y++) {
-    const leftIdx = y * width;
-    if (isDark(0, y) && !toRemove[leftIdx]) {
-      toRemove[leftIdx] = 1;
-      stack.push([0, y]);
-    }
-    const rightIdx = y * width + (width - 1);
-    if (isDark(width - 1, y) && !toRemove[rightIdx]) {
-      toRemove[rightIdx] = 1;
-      stack.push([width - 1, y]);
-    }
+  // Left and right border edges (vertical runs)
+  const leftEdge: [number, number][] = [];
+  const rightEdge: [number, number][] = [];
+  for (let y = 0; y < height; y++) {
+    leftEdge.push([0, y]);
+    rightEdge.push([width - 1, y]);
   }
+  seedBorderEdge(leftEdge);
+  seedBorderEdge(rightEdge);
 
-  // Flood-fill from border dark pixels using 4-connectivity
-  while (stack.length > 0) {
-    const popped = stack.pop();
-    if (!popped) break;
-    const [cx, cy] = popped;
+  // BFS flood-fill from border dark pixels using 4-connectivity
+  let head = 0;
+  while (head < queue.length) {
+    const entry = queue[head++];
+    if (!entry) break;
+    const [cx, cy, depth] = entry;
+
+    // Stop expanding if at max depth
+    if (maxDepth !== undefined && depth >= maxDepth) continue;
 
     for (const [nx, ny] of [
       [cx - 1, cy],
@@ -347,7 +388,7 @@ export function removeGridLines(imageData: ImageDataLike): ImageDataLike {
       const nIdx = ny * width + nx;
       if (toRemove[nIdx] || !isDark(nx, ny)) continue;
       toRemove[nIdx] = 1;
-      stack.push([nx, ny]);
+      queue.push([nx, ny, depth + 1]);
     }
   }
 
