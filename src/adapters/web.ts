@@ -93,7 +93,18 @@ export class WebCanvasAdapter implements CanvasAdapter {
     y: number
   ): void {
     const ctx = getContext(canvas as HTMLCanvasElement);
-    ctx.putImageData(imageData as ImageData, x, y);
+    // ImageDataLike may be a plain object from image processing functions;
+    // convert to native ImageData if needed
+    if (imageData instanceof ImageData) {
+      ctx.putImageData(imageData, x, y);
+    } else {
+      const native = new ImageData(
+        new Uint8ClampedArray(imageData.data),
+        imageData.width,
+        imageData.height
+      );
+      ctx.putImageData(native, x, y);
+    }
   }
 
   drawImage(
