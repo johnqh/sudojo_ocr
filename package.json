@@ -1,32 +1,26 @@
 {
   "name": "@sudobility/sudojo_ocr",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "OCR library for Sudoku puzzle scanning - works on Web, React Native, and Node.js",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
+  "type": "module",
+  "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
       "types": "./dist/index.d.ts"
     },
     "./web": {
       "import": "./dist/adapters/web.js",
-      "require": "./dist/adapters/web.cjs",
       "types": "./dist/adapters/web.d.ts"
     },
     "./node": {
       "import": "./dist/adapters/node.js",
-      "require": "./dist/adapters/node.cjs",
       "types": "./dist/adapters/node.d.ts"
     }
   },
   "scripts": {
-    "build": "bun run build:cjs && bun run build:esm",
-    "build:esm": "tsc -p tsconfig.esm.json",
-    "build:cjs": "tsc -p tsconfig.cjs.json && bun run build:cjs-rename",
-    "build:cjs-rename": "find dist -name '*.js' -not -name '*.cjs' -exec sh -c 'cp \"$1\" \"${1%.js}.cjs\"' _ {} \\;",
+    "build": "tsc -p tsconfig.esm.json",
     "clean": "rimraf dist",
     "dev": "tsc --watch",
     "test": "vitest run",

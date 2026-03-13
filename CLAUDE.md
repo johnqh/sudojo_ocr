@@ -23,7 +23,7 @@ bun run lint          # Run ESLint
 bun run lint:fix      # Run ESLint with auto-fix
 bun run format        # Format code with Prettier
 bun run format:check  # Check formatting without changes
-bun run build         # Build ESM and CJS outputs to dist/
+bun run build         # Build ESM output to dist/
 bun run clean         # Remove dist/
 bun run dev           # Watch mode for development
 bun run test          # Run tests once (vitest)
@@ -37,8 +37,9 @@ bun run test:coverage # Run tests with coverage
 - **Testing**: Vitest 4.x
 - **Linting**: ESLint 9.x + `@typescript-eslint` 8.x
 - **Formatting**: Prettier 3.x
-- **Build**: Dual ESM/CJS via two separate `tsc` passes (`tsconfig.esm.json` + `tsconfig.cjs.json`)
+- **Build**: ESM-only via `tsc -p tsconfig.esm.json`
 - **Target**: ES2020 with DOM lib (for web adapter types)
+- **Module**: ESM-only (`"type": "module"` in package.json). No CJS build. Requires Node.js 18+.
 
 ## Architecture
 
@@ -88,7 +89,7 @@ All image processing algorithms are platform-agnostic, operating on raw `ImageDa
 }
 ```
 
-Each export path provides `import` (ESM .js), `require` (CJS .cjs), and `types` (.d.ts) variants.
+Each export path provides `import` (ESM .js) and `types` (.d.ts) variants. ESM-only — no CJS build.
 
 ## OCR Pipeline
 
@@ -161,13 +162,11 @@ src/
 
 ## Build System
 
-Dual CJS/ESM build using two TypeScript configs:
-1. `tsconfig.esm.json` - Emits ESM `.js` files
-2. `tsconfig.cjs.json` - Emits `.js` files, then renamed to `.cjs` via shell script
+ESM-only build using a single TypeScript config:
+- `tsconfig.esm.json` - Emits ESM `.js` + `.d.ts` files to `dist/`
+- `tsconfig.json` (base) - For type-checking only (`noEmit: true`)
 
-Build order: `build:cjs` then `build:esm` (CJS first to avoid conflicts).
-
-The base `tsconfig.json` is for type-checking only (`noEmit: true`).
+The package uses `"type": "module"` and requires Node.js 18+ for backend consumers.
 
 ## Usage Examples
 
@@ -239,4 +238,3 @@ const result = await extractSudokuFromImage(
 - `NodeCanvasAdapter.createCanvas()` throws if called before `init()`. Always use the `createNodeAdapter()` factory function.
 - The `toTesseractInput()` return type varies by platform: `HTMLCanvasElement` for web, `Buffer` (PNG) for Node.js.
 - The `0` -> `9` correction in `digitParsing.ts` is intentional: OCR "0" in a non-empty cell is likely a misrecognized 9 (since Sudoku uses 1-9, not 0).
-- Build CJS first (`build:cjs`), then ESM (`build:esm`), because the CJS rename script copies `.js` to `.cjs` and ESM would conflict.
