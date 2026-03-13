@@ -1,6 +1,6 @@
 {
   "name": "@sudobility/sudojo_ocr",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "OCR library for Sudoku puzzle scanning - works on Web, React Native, and Node.js",
   "type": "module",
   "main": "./dist/index.js",

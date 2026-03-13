@@ -13,10 +13,11 @@ import type {
 type WebCanvas = HTMLCanvasElement & CanvasLike;
 
 /**
- * Get 2D context from canvas, throwing if not available
+ * Get 2D context from canvas, throwing if not available.
+ * Uses willReadFrequently hint for performance with getImageData calls.
  */
 function getContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) {
     throw new Error('Failed to get 2D context from canvas');
   }

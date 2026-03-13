@@ -53,7 +53,9 @@ export function findConnectedComponents(imageData: ImageDataLike): ConnectedComp
       visited[pixelIdx] = 1;
 
       while (stack.length > 0) {
-        const [cx, cy] = stack.pop()!;
+        const popped = stack.pop();
+        if (!popped) break;
+        const [cx, cy] = popped;
         component.pixelCount++;
         if (cx < component.minX) component.minX = cx;
         if (cy < component.minY) component.minY = cy;
@@ -106,10 +108,11 @@ export function classifyCellContent(imageData: ImageDataLike): CellContentType {
   }
 
   // Find the largest component by pixel count
-  let largest = components[0]!;
+  let largest = components[0];
   for (let i = 1; i < components.length; i++) {
-    if (components[i]!.pixelCount > largest.pixelCount) {
-      largest = components[i]!;
+    const comp = components[i];
+    if (comp && comp.pixelCount > largest.pixelCount) {
+      largest = comp;
     }
   }
 

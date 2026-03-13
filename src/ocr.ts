@@ -214,19 +214,21 @@ async function recognizeCells(
     const cell = cells[i];
     if (!cell) continue;
 
-    // Check if cell is empty
+    // Check if cell is empty and classify content
     const cellImageData = adapter.getImageData(cell, 0, 0, cell.width, cell.height);
-    if (isCellEmpty(cellImageData)) {
-      results.push({ digit: null, confidence: 100 });
-      onProgress?.(((i + 1) / cells.length) * 100);
-      continue;
-    }
 
-    // When pencilmark recognition is enabled, classify cell content first
+    // When pencilmark recognition is enabled, enhance before empty check
+    // so faint pencilmarks aren't missed
     if (recognizePencilmarks) {
       const enhanced = enhanceContrast(cellImageData, OCR_CONTRAST_FACTOR);
       const binarized = binarize(enhanced, OCR_BINARIZE_THRESHOLD);
       const classification = classifyCellContent(binarized);
+
+      if (classification === 'empty') {
+        results.push({ digit: null, confidence: 100 });
+        onProgress?.(((i + 1) / cells.length) * 100);
+        continue;
+      }
 
       if (classification === 'pencilmarks') {
         const binarizedCanvas = adapter.createCanvas(cell.width, cell.height);
@@ -238,6 +240,12 @@ async function recognizeCells(
         onProgress?.(((i + 1) / cells.length) * 100);
         continue;
       }
+
+      // classification === 'digit' — fall through to Tesseract OCR
+    } else if (isCellEmpty(cellImageData)) {
+      results.push({ digit: null, confidence: 100 });
+      onProgress?.(((i + 1) / cells.length) * 100);
+      continue;
     }
 
     // Process cell for OCR
