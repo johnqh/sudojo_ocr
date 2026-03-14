@@ -141,10 +141,15 @@ export function classifyCellContent(imageData: ImageDataLike): CellContentType {
  * component analysis. More robust than ink density for thin strokes
  * (e.g. digit 1) which form coherent shapes but have low pixel counts.
  * Uses a lower min-pixel threshold (3) since sub-cells are small.
+ * Components touching the sub-cell border are filtered out as they are
+ * likely grid line remnants or margin artifacts, not actual pencilmarks.
  * @param imageData - Binarized RGBA image data for a sub-cell region
- * @returns true if at least one connected component of 3+ pixels is found
+ * @returns true if at least one interior connected component of 3+ pixels is found
  */
 export function isPencilmarkPresent(imageData: ImageDataLike): boolean {
+  const { width, height } = imageData;
   const components = findConnectedComponents(imageData, 3);
-  return components.length > 0;
+  return components.some(
+    (c) => c.minX > 0 && c.minY > 0 && c.maxX < width - 1 && c.maxY < height - 1
+  );
 }

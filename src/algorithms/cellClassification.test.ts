@@ -180,8 +180,16 @@ describe('isPencilmarkPresent', () => {
     expect(isPencilmarkPresent(img)).toBe(true);
   });
 
-  it('should return true for all-black image', () => {
-    const img = createTestImageData(10, 10, { r: 0, g: 0, b: 0, a: 255 });
+  it('should return true for interior dark region', () => {
+    const img = createTestImageData(10, 10);
+    // Dark block in the interior (not touching border)
+    drawDarkRect(img, 2, 2, 5, 5);
     expect(isPencilmarkPresent(img)).toBe(true);
+  });
+
+  it('should return false for border-only dark pixels', () => {
+    // Components touching the border are filtered as grid line artifacts
+    const img = createTestImageData(10, 10, { r: 0, g: 0, b: 0, a: 255 });
+    expect(isPencilmarkPresent(img)).toBe(false);
   });
 });
