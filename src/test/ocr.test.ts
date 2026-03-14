@@ -54,14 +54,18 @@ describe('extractSudokuFromImage', () => {
     });
   }
 
-  it('should set autopencil false when recognizePencilmarks is disabled', TIMEOUT, async () => {
-    const tc = TEST_CASES[0]!;
-    const result = await extractSudokuFromImage(adapter, tc.path, Tesseract, {
-      recognizePencilmarks: false,
-    });
+  it(
+    'should set autopencil false when recognizePencilmarks is disabled',
+    TIMEOUT,
+    async () => {
+      const tc = TEST_CASES[0]!;
+      const result = await extractSudokuFromImage(adapter, tc.path, Tesseract, {
+        recognizePencilmarks: false,
+      });
 
-    expect(result.board.pencilmark.autopencil).toBe(false);
-  });
+      expect(result.board.pencilmark.autopencil).toBe(false);
+    }
+  );
 
   it(
     'should set autopencil false for digit-only board with recognizePencilmarks enabled',
@@ -117,9 +121,14 @@ describe('extractSudokuFromImage with pencilmarks', () => {
     .filter((i) => i >= 0);
 
   it('should detect pencilmarks and set autopencil true', TIMEOUT, async () => {
-    const result = await extractSudokuFromImage(adapter, PENCILMARK_IMAGE, Tesseract, {
-      recognizePencilmarks: true,
-    });
+    const result = await extractSudokuFromImage(
+      adapter,
+      PENCILMARK_IMAGE,
+      Tesseract,
+      {
+        recognizePencilmarks: true,
+      }
+    );
 
     expect(result.board.pencilmark.autopencil).toBe(true);
 
@@ -131,40 +140,65 @@ describe('extractSudokuFromImage with pencilmarks', () => {
     expect(nonEmpty.length).toBeGreaterThanOrEqual(10);
   });
 
-  it('should recognize large digits correctly alongside pencilmarks', TIMEOUT, async () => {
-    const result = await extractSudokuFromImage(adapter, PENCILMARK_IMAGE, Tesseract, {
-      recognizePencilmarks: true,
-    });
+  it(
+    'should recognize large digits correctly alongside pencilmarks',
+    TIMEOUT,
+    async () => {
+      const result = await extractSudokuFromImage(
+        adapter,
+        PENCILMARK_IMAGE,
+        Tesseract,
+        {
+          recognizePencilmarks: true,
+        }
+      );
 
-    expect(result.digitCount).toBeGreaterThan(0);
+      expect(result.digitCount).toBeGreaterThan(0);
 
-    const puzzle = result.board.original;
-    let correctGivens = 0;
-    let totalGivens = 0;
-    for (let i = 0; i < 81; i++) {
-      if (EXPECTED_DIGITS[i] !== '0') {
-        totalGivens++;
-        if (puzzle[i] === EXPECTED_DIGITS[i]) correctGivens++;
+      const puzzle = result.board.original;
+      let correctGivens = 0;
+      let totalGivens = 0;
+      for (let i = 0; i < 81; i++) {
+        if (EXPECTED_DIGITS[i] !== '0') {
+          totalGivens++;
+          if (puzzle[i] === EXPECTED_DIGITS[i]) correctGivens++;
+        }
       }
+      // Expect at least 90% of given digits recognized correctly
+      expect(correctGivens).toBeGreaterThanOrEqual(
+        Math.floor(totalGivens * 0.9)
+      );
     }
-    // Expect at least 90% of given digits recognized correctly
-    expect(correctGivens).toBeGreaterThanOrEqual(Math.floor(totalGivens * 0.9));
-  });
+  );
 
-  it('should not set autopencil when recognizePencilmarks is disabled', TIMEOUT, async () => {
-    const result = await extractSudokuFromImage(adapter, PENCILMARK_IMAGE, Tesseract, {
-      recognizePencilmarks: false,
-    });
+  it(
+    'should not set autopencil when recognizePencilmarks is disabled',
+    TIMEOUT,
+    async () => {
+      const result = await extractSudokuFromImage(
+        adapter,
+        PENCILMARK_IMAGE,
+        Tesseract,
+        {
+          recognizePencilmarks: false,
+        }
+      );
 
-    expect(result.board.pencilmark.autopencil).toBe(false);
-    const entries = result.board.pencilmark.numbers.split(',');
-    expect(entries.every((e) => e === '')).toBe(true);
-  });
+      expect(result.board.pencilmark.autopencil).toBe(false);
+      const entries = result.board.pencilmark.numbers.split(',');
+      expect(entries.every((e) => e === '')).toBe(true);
+    }
+  );
 
   it('should produce valid pencilmark number entries', TIMEOUT, async () => {
-    const result = await extractSudokuFromImage(adapter, PENCILMARK_IMAGE, Tesseract, {
-      recognizePencilmarks: true,
-    });
+    const result = await extractSudokuFromImage(
+      adapter,
+      PENCILMARK_IMAGE,
+      Tesseract,
+      {
+        recognizePencilmarks: true,
+      }
+    );
 
     const entries = result.board.pencilmark.numbers.split(',');
 
@@ -184,9 +218,14 @@ describe('extractSudokuFromImage with pencilmarks', () => {
   });
 
   it('should detect pencilmarks in expected cells', TIMEOUT, async () => {
-    const result = await extractSudokuFromImage(adapter, PENCILMARK_IMAGE, Tesseract, {
-      recognizePencilmarks: true,
-    });
+    const result = await extractSudokuFromImage(
+      adapter,
+      PENCILMARK_IMAGE,
+      Tesseract,
+      {
+        recognizePencilmarks: true,
+      }
+    );
 
     const entries = result.board.pencilmark.numbers.split(',');
 
@@ -205,9 +244,14 @@ describe('extractSudokuFromImage with pencilmarks', () => {
   });
 
   it('should detect correct pencilmark digits per cell', TIMEOUT, async () => {
-    const result = await extractSudokuFromImage(adapter, PENCILMARK_IMAGE, Tesseract, {
-      recognizePencilmarks: true,
-    });
+    const result = await extractSudokuFromImage(
+      adapter,
+      PENCILMARK_IMAGE,
+      Tesseract,
+      {
+        recognizePencilmarks: true,
+      }
+    );
 
     const entries = result.board.pencilmark.numbers.split(',');
 
@@ -221,11 +265,15 @@ describe('extractSudokuFromImage with pencilmarks', () => {
       const detectedDigits = new Set(entries[idx].split(''));
       const expectedDigits = new Set(expectedEntries[idx].split(''));
       // Check each detected digit is in the expected set
-      const allCorrect = [...detectedDigits].every((d) => expectedDigits.has(d));
+      const allCorrect = [...detectedDigits].every((d) =>
+        expectedDigits.has(d)
+      );
       if (allCorrect) correctSubsetCount++;
     }
 
     // At least 50% of detected cells should have only correct digits (no false positives)
-    expect(correctSubsetCount).toBeGreaterThanOrEqual(Math.floor(detectedCells * 0.5));
+    expect(correctSubsetCount).toBeGreaterThanOrEqual(
+      Math.floor(detectedCells * 0.5)
+    );
   });
 });
