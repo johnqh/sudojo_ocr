@@ -14,7 +14,6 @@ import {
   DEFAULT_OCR_CONFIG,
   OCR_TARGET_CELL_SIZE,
   OCR_CELL_PADDING,
-  OCR_BINARIZE_THRESHOLD,
   OCR_CONTRAST_FACTOR,
   OCR_PENCILMARK_CELL_MARGIN,
 } from './types.js';
@@ -117,12 +116,10 @@ function processForOCR(
   cellCanvas: CanvasLike,
   useDilation: boolean = false
 ): CanvasLike {
-  // Enhance contrast
+  // Enhance contrast then binarize for clean Tesseract input
   const imageData = adapter.getImageData(cellCanvas, 0, 0, cellCanvas.width, cellCanvas.height);
   const enhanced = enhanceContrast(imageData, OCR_CONTRAST_FACTOR);
-
-  // Binarize
-  let processed = binarize(enhanced, OCR_BINARIZE_THRESHOLD);
+  let processed = binarize(enhanced, 0.30);
 
   // Optionally apply dilation to thicken thin strokes
   if (useDilation) {
@@ -227,11 +224,9 @@ async function recognizeCells(
     // Check if cell is empty and classify content
     const cellImageData = adapter.getImageData(cell, 0, 0, cell.width, cell.height);
 
-    // When pencilmark recognition is enabled, enhance before empty check
-    // so faint pencilmarks aren't missed
+    // When pencilmark recognition is enabled, binarize and classify
     if (recognizePencilmarks) {
-      const enhanced = enhanceContrast(cellImageData, OCR_CONTRAST_FACTOR);
-      const binarized = binarize(enhanced, OCR_BINARIZE_THRESHOLD);
+      const binarized = binarize(cellImageData, 0.30);
       // Remove grid line remnants — depth-limited + min border run length
       const cleaned = removeGridLines(binarized, 3, 3);
       const classification = classifyCellContent(cleaned);

@@ -128,26 +128,48 @@ describe('enhanceContrast', () => {
 });
 
 describe('binarize', () => {
-  it('should convert values below threshold to 0', () => {
-    const imageData = createTestImageData(1, 1, { r: 100, g: 100, b: 100, a: 255 });
-    const binarized = binarize(imageData, 160);
-    expect(binarized.data[0]).toBe(0);
-    expect(binarized.data[1]).toBe(0);
-    expect(binarized.data[2]).toBe(0);
+  it('should convert dark pixels to black and near-white to white', () => {
+    // Two pixels: dark (Y=50) and light (Y=200). Range=150, threshold=200-15=185
+    const data = new Uint8ClampedArray([
+      50, 50, 50, 255,
+      200, 200, 200, 255,
+    ]);
+    const imageData: ImageDataLike = { data, width: 2, height: 1 };
+    const binarized = binarize(imageData);
+    expect(binarized.data[0]).toBe(0);   // dark → black
+    expect(binarized.data[4]).toBe(255); // light → white
   });
 
-  it('should convert values at/above threshold to 255', () => {
-    const imageData = createTestImageData(1, 1, { r: 200, g: 200, b: 200, a: 255 });
-    const binarized = binarize(imageData, 160);
+  it('should make uniform image all white', () => {
+    // All same brightness → range=0, everything at max → white
+    const imageData = createTestImageData(2, 2, { r: 128, g: 128, b: 128, a: 255 });
+    const binarized = binarize(imageData);
     expect(binarized.data[0]).toBe(255);
-    expect(binarized.data[1]).toBe(255);
-    expect(binarized.data[2]).toBe(255);
+  });
+
+  it('should classify mid-range pixels as black with default 10%', () => {
+    // Three pixels: Y=0, Y=128, Y=255. Range=255, threshold=255-25.5=229.5
+    const data = new Uint8ClampedArray([
+      0, 0, 0, 255,
+      128, 128, 128, 255,
+      255, 255, 255, 255,
+    ]);
+    const imageData: ImageDataLike = { data, width: 3, height: 1 };
+    const binarized = binarize(imageData);
+    expect(binarized.data[0]).toBe(0);   // Y=0 → black
+    expect(binarized.data[4]).toBe(0);   // Y=128 → black
+    expect(binarized.data[8]).toBe(255); // Y=255 → white
   });
 
   it('should preserve alpha channel', () => {
-    const imageData = createTestImageData(1, 1, { r: 100, g: 100, b: 100, a: 128 });
-    const binarized = binarize(imageData, 160);
+    const data = new Uint8ClampedArray([
+      50, 50, 50, 128,
+      200, 200, 200, 200,
+    ]);
+    const imageData: ImageDataLike = { data, width: 2, height: 1 };
+    const binarized = binarize(imageData);
     expect(binarized.data[3]).toBe(128);
+    expect(binarized.data[7]).toBe(200);
   });
 });
 

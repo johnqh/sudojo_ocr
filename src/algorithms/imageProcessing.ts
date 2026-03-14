@@ -155,29 +155,61 @@ export function enhanceContrast(
 }
 
 /**
- * Binarize image to black and white using a global luminance threshold.
- * Pixels below the threshold become black (0), above become white (255).
+ * Binarize image to black and white using adaptive luminance thresholding.
+ * Converts RGB to Y (luminance), finds the min/max Y range, then treats
+ * pixels within topPercent of the highest Y as white, everything else as black.
  * @param imageData - Source RGBA image data
- * @param threshold - Luminance cutoff value 0-255 (default: 160)
+ * @param topPercent - Fraction of the Y range considered "white" (default: 0.10 = 10%)
  * @returns New ImageDataLike with only black or white pixels (alpha preserved)
  */
 export function binarize(
   imageData: ImageDataLike,
-  threshold: number = 160
+  topPercent: number = 0.10
 ): ImageDataLike {
   const { data, width, height } = imageData;
+  const numPixels = width * height;
   const newData = new Uint8ClampedArray(data.length);
 
-  for (let i = 0; i < data.length; i += 4) {
-    const gray =
-      0.299 * safeGet(data, i) +
-      0.587 * safeGet(data, i + 1) +
-      0.114 * safeGet(data, i + 2);
-    const val = gray < threshold ? 0 : 255;
-    newData[i] = val;
-    newData[i + 1] = val;
-    newData[i + 2] = val;
-    newData[i + 3] = safeGet(data, i + 3); // Alpha
+  // First pass: compute Y (luminance) per pixel, find min/max
+  const yValues = new Float32Array(numPixels);
+  let minY = 255;
+  let maxY = 0;
+
+  for (let i = 0; i < numPixels; i++) {
+    const idx = i * 4;
+    const y =
+      0.299 * safeGet(data, idx) +
+      0.587 * safeGet(data, idx + 1) +
+      0.114 * safeGet(data, idx + 2);
+    yValues[i] = y;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+
+  // If the brightness range is too narrow, the image is near-uniform — treat as all white
+  const range = maxY - minY;
+  if (range < 50) {
+    for (let i = 0; i < numPixels; i++) {
+      const idx = i * 4;
+      newData[idx] = 255;
+      newData[idx + 1] = 255;
+      newData[idx + 2] = 255;
+      newData[idx + 3] = safeGet(data, idx + 3);
+    }
+    return { data: newData, width, height };
+  }
+
+  // Threshold: only pixels within topPercent of the highest Y → white
+  const threshold = maxY - topPercent * range;
+
+  // Second pass: binarize
+  for (let i = 0; i < numPixels; i++) {
+    const idx = i * 4;
+    const val = yValues[i] >= threshold ? 255 : 0;
+    newData[idx] = val;
+    newData[idx + 1] = val;
+    newData[idx + 2] = val;
+    newData[idx + 3] = safeGet(data, idx + 3); // Alpha
   }
 
   return { data: newData, width, height };
