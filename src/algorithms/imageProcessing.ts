@@ -366,7 +366,7 @@ export function removeGridLines(
           const runLen = i - runStart;
           if (runLen >= minBorderRun) {
             for (let j = runStart; j < i; j++) {
-              const c = coords[j]!;
+              const c = coords[j] as [number, number];
               const idx = c[1] * width + c[0];
               if (!toRemove[idx]) {
                 toRemove[idx] = 1;
