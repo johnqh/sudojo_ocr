@@ -27,4 +27,7 @@ export {
   classifyCellContent,
   isPencilmarkPresent,
 } from './cellClassification.js';
-export type { ConnectedComponent, CellContentType } from './cellClassification.js';
+export type {
+  ConnectedComponent,
+  CellContentType,
+} from './cellClassification.js';

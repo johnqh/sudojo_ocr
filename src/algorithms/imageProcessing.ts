@@ -164,7 +164,7 @@ export function enhanceContrast(
  */
 export function binarize(
   imageData: ImageDataLike,
-  topPercent: number = 0.10
+  topPercent: number = 0.1
 ): ImageDataLike {
   const { data, width, height } = imageData;
   const numPixels = width * height;
@@ -328,7 +328,7 @@ export function dilate(imageData: ImageDataLike): ImageDataLike {
 export function removeGridLines(
   imageData: ImageDataLike,
   maxDepth?: number,
-  minBorderRun: number = 1,
+  minBorderRun: number = 1
 ): ImageDataLike {
   const { data, width, height } = imageData;
   const newData = new Uint8ClampedArray(data.length);
@@ -352,9 +352,7 @@ export function removeGridLines(
    * Find runs of consecutive dark pixels along a border edge and only
    * seed from runs >= minBorderRun length.
    */
-  function seedBorderEdge(
-    coords: [number, number][],
-  ): void {
+  function seedBorderEdge(coords: [number, number][]): void {
     let runStart = -1;
     for (let i = 0; i <= coords.length; i++) {
       const coord = coords[i];

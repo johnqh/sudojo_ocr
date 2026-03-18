@@ -52,13 +52,23 @@ function extractCells(
       const srcWidth = cellWidth - 2 * marginX;
       const srcHeight = cellHeight - 2 * marginY;
 
-      const scale = Math.max(1, OCR_TARGET_CELL_SIZE / Math.min(srcWidth, srcHeight));
+      const scale = Math.max(
+        1,
+        OCR_TARGET_CELL_SIZE / Math.min(srcWidth, srcHeight)
+      );
       const cellCanvas = adapter.createCanvas(
         Math.round(srcWidth * scale),
         Math.round(srcHeight * scale)
       );
 
-      adapter.fillRect(cellCanvas, 'white', 0, 0, cellCanvas.width, cellCanvas.height);
+      adapter.fillRect(
+        cellCanvas,
+        'white',
+        0,
+        0,
+        cellCanvas.width,
+        cellCanvas.height
+      );
       adapter.drawImage(
         cellCanvas,
         source,
@@ -91,7 +101,14 @@ function addPadding(
     cellCanvas.width + padding * 2,
     cellCanvas.height + padding * 2
   );
-  adapter.fillRect(paddedCanvas, 'white', 0, 0, paddedCanvas.width, paddedCanvas.height);
+  adapter.fillRect(
+    paddedCanvas,
+    'white',
+    0,
+    0,
+    paddedCanvas.width,
+    paddedCanvas.height
+  );
   adapter.drawImage(
     paddedCanvas,
     cellCanvas,
@@ -117,9 +134,15 @@ function processForOCR(
   useDilation: boolean = false
 ): CanvasLike {
   // Enhance contrast then binarize for clean Tesseract input
-  const imageData = adapter.getImageData(cellCanvas, 0, 0, cellCanvas.width, cellCanvas.height);
+  const imageData = adapter.getImageData(
+    cellCanvas,
+    0,
+    0,
+    cellCanvas.width,
+    cellCanvas.height
+  );
   const enhanced = enhanceContrast(imageData, OCR_CONTRAST_FACTOR);
-  let processed = binarize(enhanced, 0.30);
+  let processed = binarize(enhanced, 0.3);
 
   // Optionally apply dilation to thicken thin strokes
   if (useDilation) {
@@ -127,7 +150,10 @@ function processForOCR(
   }
 
   // Create new canvas with processed data
-  const processedCanvas = adapter.createCanvas(cellCanvas.width, cellCanvas.height);
+  const processedCanvas = adapter.createCanvas(
+    cellCanvas.width,
+    cellCanvas.height
+  );
   adapter.putImageData(processedCanvas, processed, 0, 0);
 
   // Add padding
@@ -141,7 +167,10 @@ function processForOCR(
  * The digit is inferred from position (1-9, row-major order).
  * @returns Sorted array of detected digit numbers (e.g., [1, 3, 7])
  */
-function detectPencilmarks(adapter: CanvasAdapter, cellCanvas: CanvasLike): number[] {
+function detectPencilmarks(
+  adapter: CanvasAdapter,
+  cellCanvas: CanvasLike
+): number[] {
   const digits: number[] = [];
   const subWidth = Math.floor(cellCanvas.width / 3);
   const subHeight = Math.floor(cellCanvas.height / 3);
@@ -162,18 +191,7 @@ function detectPencilmarks(adapter: CanvasAdapter, cellCanvas: CanvasLike): numb
 
       const subCanvas = adapter.createCanvas(sw, sh);
       adapter.fillRect(subCanvas, 'white', 0, 0, sw, sh);
-      adapter.drawImage(
-        subCanvas,
-        cellCanvas,
-        sx,
-        sy,
-        sw,
-        sh,
-        0,
-        0,
-        sw,
-        sh
-      );
+      adapter.drawImage(subCanvas, cellCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
 
       const subImageData = adapter.getImageData(subCanvas, 0, 0, sw, sh);
 
@@ -222,11 +240,17 @@ async function recognizeCells(
     if (!cell) continue;
 
     // Check if cell is empty and classify content
-    const cellImageData = adapter.getImageData(cell, 0, 0, cell.width, cell.height);
+    const cellImageData = adapter.getImageData(
+      cell,
+      0,
+      0,
+      cell.width,
+      cell.height
+    );
 
     // When pencilmark recognition is enabled, binarize and classify
     if (recognizePencilmarks) {
-      const binarized = binarize(cellImageData, 0.30);
+      const binarized = binarize(cellImageData, 0.3);
       // Remove grid line remnants — depth-limited + min border run length
       const cleaned = removeGridLines(binarized, 3, 3);
       const classification = classifyCellContent(cleaned);
@@ -263,7 +287,7 @@ async function recognizeCells(
 
     try {
       const tesseractInput = adapter.toTesseractInput(processedCell);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const { data } = await worker.recognize(tesseractInput as any);
       const text = data.text.trim();
       confidence = data.confidence || 0;
@@ -278,7 +302,7 @@ async function recognizeCells(
       if (digit === null) {
         const dilatedCell = processForOCR(adapter, cell, true);
         const dilatedInput = adapter.toTesseractInput(dilatedCell);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
         const dilatedResult = await worker.recognize(dilatedInput as any);
         const dilatedText = dilatedResult.data.text.trim();
         const dilatedConfidence = dilatedResult.data.confidence || 0;
@@ -328,15 +352,34 @@ export async function extractSudokuFromImage(
 
   // Create source canvas
   const sourceCanvas = adapter.createCanvas(width, height);
-  adapter.drawImage(sourceCanvas, image, 0, 0, width, height, 0, 0, width, height);
+  adapter.drawImage(
+    sourceCanvas,
+    image,
+    0,
+    0,
+    width,
+    height,
+    0,
+    0,
+    width,
+    height
+  );
 
   // Detect and crop board
   let croppedCanvas: CanvasLike;
   if (cfg.skipBoardDetection) {
     croppedCanvas = sourceCanvas;
-    onProgress?.({ status: 'processing', progress: 15, message: 'Processing image...' });
+    onProgress?.({
+      status: 'processing',
+      progress: 15,
+      message: 'Processing image...',
+    });
   } else {
-    onProgress?.({ status: 'processing', progress: 5, message: 'Detecting board...' });
+    onProgress?.({
+      status: 'processing',
+      progress: 5,
+      message: 'Detecting board...',
+    });
 
     const imageData = adapter.getImageData(sourceCanvas, 0, 0, width, height);
     const rectangle = detectBoardRectangle(imageData);
@@ -344,12 +387,27 @@ export async function extractSudokuFromImage(
     if (rectangle) {
       const { x, y, size } = squarifyRectangle(rectangle);
       croppedCanvas = adapter.createCanvas(size, size);
-      adapter.drawImage(croppedCanvas, sourceCanvas, x, y, size, size, 0, 0, size, size);
+      adapter.drawImage(
+        croppedCanvas,
+        sourceCanvas,
+        x,
+        y,
+        size,
+        size,
+        0,
+        0,
+        size,
+        size
+      );
     } else {
       croppedCanvas = sourceCanvas;
     }
 
-    onProgress?.({ status: 'processing', progress: 15, message: 'Processing image...' });
+    onProgress?.({
+      status: 'processing',
+      progress: 15,
+      message: 'Processing image...',
+    });
   }
 
   // Preprocess
@@ -363,7 +421,10 @@ export async function extractSudokuFromImage(
       croppedCanvas.height
     );
     const processed = preprocessForOCR(imageData);
-    processedCanvas = adapter.createCanvas(croppedCanvas.width, croppedCanvas.height);
+    processedCanvas = adapter.createCanvas(
+      croppedCanvas.width,
+      croppedCanvas.height
+    );
     adapter.putImageData(processedCanvas, processed, 0, 0);
   } else {
     processedCanvas = croppedCanvas;
@@ -399,7 +460,11 @@ export async function extractSudokuFromImage(
     }
   );
 
-  onProgress?.({ status: 'processing', progress: 95, message: 'Finalizing...' });
+  onProgress?.({
+    status: 'processing',
+    progress: 95,
+    message: 'Finalizing...',
+  });
 
   // Build result
   const puzzle = cellResults.map((r) => r.digit ?? 0).join('');
@@ -438,7 +503,18 @@ export async function detectAndCropBoard(
   const { image, width, height } = await adapter.loadImage(imageSource);
 
   const sourceCanvas = adapter.createCanvas(width, height);
-  adapter.drawImage(sourceCanvas, image, 0, 0, width, height, 0, 0, width, height);
+  adapter.drawImage(
+    sourceCanvas,
+    image,
+    0,
+    0,
+    width,
+    height,
+    0,
+    0,
+    width,
+    height
+  );
 
   const imageData = adapter.getImageData(sourceCanvas, 0, 0, width, height);
   const rectangle = detectBoardRectangle(imageData);
@@ -446,7 +522,18 @@ export async function detectAndCropBoard(
   if (rectangle) {
     const { x, y, size } = squarifyRectangle(rectangle);
     const croppedCanvas = adapter.createCanvas(size, size);
-    adapter.drawImage(croppedCanvas, sourceCanvas, x, y, size, size, 0, 0, size, size);
+    adapter.drawImage(
+      croppedCanvas,
+      sourceCanvas,
+      x,
+      y,
+      size,
+      size,
+      0,
+      0,
+      size,
+      size
+    );
     return adapter.toDataURL(croppedCanvas);
   }
 
@@ -471,7 +558,18 @@ export async function extractCellImages(
   const { image, width, height } = await adapter.loadImage(croppedBoardImage);
 
   const sourceCanvas = adapter.createCanvas(width, height);
-  adapter.drawImage(sourceCanvas, image, 0, 0, width, height, 0, 0, width, height);
+  adapter.drawImage(
+    sourceCanvas,
+    image,
+    0,
+    0,
+    width,
+    height,
+    0,
+    0,
+    width,
+    height
+  );
 
   const cells = extractCells(adapter, sourceCanvas, marginRatio);
   return cells.map((cell) => adapter.toDataURL(cell));

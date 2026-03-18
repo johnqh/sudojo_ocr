@@ -33,7 +33,12 @@ function createTestImageData(
 
 describe('toGrayscale', () => {
   it('should convert white image to grayscale 255', () => {
-    const imageData = createTestImageData(2, 2, { r: 255, g: 255, b: 255, a: 255 });
+    const imageData = createTestImageData(2, 2, {
+      r: 255,
+      g: 255,
+      b: 255,
+      a: 255,
+    });
     const gray = toGrayscale(imageData);
     expect(gray.length).toBe(4);
     expect(gray[0]).toBe(255);
@@ -100,7 +105,12 @@ describe('cannyEdgeDetection', () => {
 
 describe('enhanceContrast', () => {
   it('should return ImageDataLike with same dimensions', () => {
-    const imageData = createTestImageData(3, 3, { r: 128, g: 128, b: 128, a: 255 });
+    const imageData = createTestImageData(3, 3, {
+      r: 128,
+      g: 128,
+      b: 128,
+      a: 255,
+    });
     const enhanced = enhanceContrast(imageData, 1.5);
     expect(enhanced.width).toBe(3);
     expect(enhanced.height).toBe(3);
@@ -108,7 +118,12 @@ describe('enhanceContrast', () => {
   });
 
   it('should preserve alpha channel', () => {
-    const imageData = createTestImageData(1, 1, { r: 128, g: 128, b: 128, a: 200 });
+    const imageData = createTestImageData(1, 1, {
+      r: 128,
+      g: 128,
+      b: 128,
+      a: 200,
+    });
     const enhanced = enhanceContrast(imageData, 1.5);
     expect(enhanced.data[3]).toBe(200);
   });
@@ -116,8 +131,14 @@ describe('enhanceContrast', () => {
   it('should enhance contrast around average', () => {
     // Create image with two pixels: one dark, one light
     const data = new Uint8ClampedArray([
-      64, 64, 64, 255,  // dark pixel
-      192, 192, 192, 255, // light pixel
+      64,
+      64,
+      64,
+      255, // dark pixel
+      192,
+      192,
+      192,
+      255, // light pixel
     ]);
     const imageData: ImageDataLike = { data, width: 2, height: 1 };
     const enhanced = enhanceContrast(imageData, 2.0);
@@ -130,19 +151,21 @@ describe('enhanceContrast', () => {
 describe('binarize', () => {
   it('should convert dark pixels to black and near-white to white', () => {
     // Two pixels: dark (Y=50) and light (Y=200). Range=150, threshold=200-15=185
-    const data = new Uint8ClampedArray([
-      50, 50, 50, 255,
-      200, 200, 200, 255,
-    ]);
+    const data = new Uint8ClampedArray([50, 50, 50, 255, 200, 200, 200, 255]);
     const imageData: ImageDataLike = { data, width: 2, height: 1 };
     const binarized = binarize(imageData);
-    expect(binarized.data[0]).toBe(0);   // dark → black
+    expect(binarized.data[0]).toBe(0); // dark → black
     expect(binarized.data[4]).toBe(255); // light → white
   });
 
   it('should make uniform image all white', () => {
     // All same brightness → range=0, everything at max → white
-    const imageData = createTestImageData(2, 2, { r: 128, g: 128, b: 128, a: 255 });
+    const imageData = createTestImageData(2, 2, {
+      r: 128,
+      g: 128,
+      b: 128,
+      a: 255,
+    });
     const binarized = binarize(imageData);
     expect(binarized.data[0]).toBe(255);
   });
@@ -150,22 +173,17 @@ describe('binarize', () => {
   it('should classify mid-range pixels as black with default 10%', () => {
     // Three pixels: Y=0, Y=128, Y=255. Range=255, threshold=255-25.5=229.5
     const data = new Uint8ClampedArray([
-      0, 0, 0, 255,
-      128, 128, 128, 255,
-      255, 255, 255, 255,
+      0, 0, 0, 255, 128, 128, 128, 255, 255, 255, 255, 255,
     ]);
     const imageData: ImageDataLike = { data, width: 3, height: 1 };
     const binarized = binarize(imageData);
-    expect(binarized.data[0]).toBe(0);   // Y=0 → black
-    expect(binarized.data[4]).toBe(0);   // Y=128 → black
+    expect(binarized.data[0]).toBe(0); // Y=0 → black
+    expect(binarized.data[4]).toBe(0); // Y=128 → black
     expect(binarized.data[8]).toBe(255); // Y=255 → white
   });
 
   it('should preserve alpha channel', () => {
-    const data = new Uint8ClampedArray([
-      50, 50, 50, 128,
-      200, 200, 200, 200,
-    ]);
+    const data = new Uint8ClampedArray([50, 50, 50, 128, 200, 200, 200, 200]);
     const imageData: ImageDataLike = { data, width: 2, height: 1 };
     const binarized = binarize(imageData);
     expect(binarized.data[3]).toBe(128);
@@ -175,7 +193,12 @@ describe('binarize', () => {
 
 describe('preprocessForOCR', () => {
   it('should return ImageDataLike with same dimensions', () => {
-    const imageData = createTestImageData(3, 3, { r: 128, g: 128, b: 128, a: 255 });
+    const imageData = createTestImageData(3, 3, {
+      r: 128,
+      g: 128,
+      b: 128,
+      a: 255,
+    });
     const processed = preprocessForOCR(imageData);
     expect(processed.width).toBe(3);
     expect(processed.height).toBe(3);
@@ -185,8 +208,7 @@ describe('preprocessForOCR', () => {
   it('should stretch contrast', () => {
     // Create image with limited range (100-150)
     const data = new Uint8ClampedArray([
-      100, 100, 100, 255,
-      150, 150, 150, 255,
+      100, 100, 100, 255, 150, 150, 150, 255,
     ]);
     const imageData: ImageDataLike = { data, width: 2, height: 1 };
     const processed = preprocessForOCR(imageData);
@@ -198,7 +220,12 @@ describe('preprocessForOCR', () => {
 
 describe('isCellEmpty', () => {
   it('should return true for uniform white image', () => {
-    const imageData = createTestImageData(10, 10, { r: 255, g: 255, b: 255, a: 255 });
+    const imageData = createTestImageData(10, 10, {
+      r: 255,
+      g: 255,
+      b: 255,
+      a: 255,
+    });
     expect(isCellEmpty(imageData)).toBe(true);
   });
 
@@ -208,7 +235,12 @@ describe('isCellEmpty', () => {
   });
 
   it('should return true for uniform gray image', () => {
-    const imageData = createTestImageData(10, 10, { r: 128, g: 128, b: 128, a: 255 });
+    const imageData = createTestImageData(10, 10, {
+      r: 128,
+      g: 128,
+      b: 128,
+      a: 255,
+    });
     expect(isCellEmpty(imageData)).toBe(true);
   });
 
@@ -273,7 +305,9 @@ describe('removeGridLines', () => {
   it('should remove dark pixels connected to the border', () => {
     // A line of dark pixels from left border inward: (0,5), (1,5), (2,5)
     const img = createBinarizedImage(10, 10, [
-      [0, 5], [1, 5], [2, 5],
+      [0, 5],
+      [1, 5],
+      [2, 5],
     ]);
     const result = removeGridLines(img);
     expect(isDark(result, 0, 5)).toBe(false);
@@ -296,9 +330,15 @@ describe('removeGridLines', () => {
     }
     // Interior digit blob
     const interiorPixels: [number, number][] = [
-      [4, 4], [5, 4], [4, 5], [5, 5],
+      [4, 4],
+      [5, 4],
+      [4, 5],
+      [5, 5],
     ];
-    const img = createBinarizedImage(10, 10, [...borderPixels, ...interiorPixels]);
+    const img = createBinarizedImage(10, 10, [
+      ...borderPixels,
+      ...interiorPixels,
+    ]);
     const result = removeGridLines(img);
 
     // Border line should be removed

@@ -150,7 +150,12 @@ describe('detectBoardRectangle', () => {
     const imageData = createTestImageData(200, 200, 255);
 
     // Draw a dark square border
-    drawRectangle(imageData, { left: 30, top: 30, right: 170, bottom: 170 }, 0, 5);
+    drawRectangle(
+      imageData,
+      { left: 30, top: 30, right: 170, bottom: 170 },
+      0,
+      5
+    );
 
     const result = detectBoardRectangle(imageData);
     expect(result).not.toBeNull();

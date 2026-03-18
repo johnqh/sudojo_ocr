@@ -94,7 +94,12 @@ export interface CanvasAdapter {
   ): ImageDataLike;
 
   /** Put image data to canvas */
-  putImageData(canvas: CanvasLike, imageData: ImageDataLike, x: number, y: number): void;
+  putImageData(
+    canvas: CanvasLike,
+    imageData: ImageDataLike,
+    x: number,
+    y: number
+  ): void;
 
   /** Draw image to canvas */
   drawImage(
@@ -154,7 +159,7 @@ export interface TesseractModule {
   createWorker: (
     lang: string,
     oem?: number,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     options?: any
   ) => Promise<TesseractWorker>;
   PSM: {
@@ -164,9 +169,8 @@ export interface TesseractModule {
 
 /** Minimal Tesseract Worker interface */
 export interface TesseractWorker {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setParameters: (params: any) => Promise<void>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   recognize: (image: any) => Promise<{
     data: {
       text: string;

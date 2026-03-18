@@ -65,6 +65,8 @@ export default [
         HTMLVideoElement: 'readonly',
         HTMLTextAreaElement: 'readonly',
         HTMLCanvasElement: 'readonly',
+        CanvasRenderingContext2D: 'readonly',
+        ImageData: 'readonly',
         Event: 'readonly',
         Element: 'readonly',
         Node: 'readonly',

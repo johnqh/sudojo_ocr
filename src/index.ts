@@ -40,7 +40,11 @@ export type {
 export { DEFAULT_OCR_CONFIG } from './types.js';
 
 // Main OCR functions
-export { extractSudokuFromImage, detectAndCropBoard, extractCellImages } from './ocr.js';
+export {
+  extractSudokuFromImage,
+  detectAndCropBoard,
+  extractCellImages,
+} from './ocr.js';
 
 // Algorithms (for advanced usage)
 export {
@@ -60,4 +64,7 @@ export {
   isPencilmarkPresent,
   removeGridLines,
 } from './algorithms/index.js';
-export type { ConnectedComponent, CellContentType } from './algorithms/index.js';
+export type {
+  ConnectedComponent,
+  CellContentType,
+} from './algorithms/index.js';

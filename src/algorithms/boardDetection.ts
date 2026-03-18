@@ -3,7 +3,11 @@
  */
 
 import type { Rectangle } from '../types.js';
-import { toGrayscale, gaussianBlur, cannyEdgeDetection } from './imageProcessing.js';
+import {
+  toGrayscale,
+  gaussianBlur,
+  cannyEdgeDetection,
+} from './imageProcessing.js';
 import type { ImageDataLike } from '../types.js';
 
 interface Line {
@@ -357,7 +361,9 @@ export function findRectangleDarkPixels(
  * @param imageData - Source RGBA image data
  * @returns Bounding rectangle of the detected board, or null if all methods fail
  */
-export function detectBoardRectangle(imageData: ImageDataLike): Rectangle | null {
+export function detectBoardRectangle(
+  imageData: ImageDataLike
+): Rectangle | null {
   const { width, height } = imageData;
 
   // Convert to grayscale

@@ -122,7 +122,10 @@ export class NodeCanvasAdapter implements CanvasAdapter {
     const ctx = (canvas as unknown as NapiCanvas).getContext('2d');
     // Create a native ImageData object and copy the data
     // This is needed because @napi-rs/canvas requires its own ImageData type
-    const nativeImageData = ctx.createImageData(imageData.width, imageData.height);
+    const nativeImageData = ctx.createImageData(
+      imageData.width,
+      imageData.height
+    );
     nativeImageData.data.set(imageData.data);
     ctx.putImageData(nativeImageData, x, y);
   }
