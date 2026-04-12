@@ -1,6 +1,6 @@
 {
   "name": "@sudobility/sudojo_ocr",
-  "version": "1.1.22",
+  "version": "1.1.23",
   "description": "OCR library for Sudoku puzzle scanning - works on Web, React Native, and Node.js",
   "type": "module",
   "main": "./dist/index.js",
@@ -50,7 +50,7 @@
   "license": "BUSL-1.1",
   "peerDependencies": {
     "tesseract.js": "^5.0.0 || ^6.0.0 || ^7.0.0",
-    "@sudobility/sudojo_types": "^1.2.48"
+    "@sudobility/sudojo_types": "^1.2.49"
   },
   "peerDependenciesMeta": {
     "@napi-rs/canvas": {

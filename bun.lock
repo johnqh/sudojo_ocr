@@ -23,7 +23,7 @@
         "vitest": "^4.0.15",
       },
       "peerDependencies": {
-        "@sudobility/sudojo_types": "^1.2.48",
+        "@sudobility/sudojo_types": "^1.2.49",
         "tesseract.js": "^5.0.0 || ^6.0.0 || ^7.0.0",
       },
     },
