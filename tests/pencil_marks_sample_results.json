@@ -14,7 +14,7 @@
     "",
     "23",
     "",
-    "",
+    "25",
     "369",
     "379",
     "",
@@ -26,20 +26,20 @@
     "",
     "",
     "",
+    "7",
     "",
     "",
     "",
     "",
     "",
+    "1",
     "",
     "",
-    "",
-    "",
-    "",
-    "",
-    "",
+    "1",
+    "1",
+    "58",
     "29",
-    "29",
+    "",
     "",
     "",
     "",
@@ -54,25 +54,25 @@
     "",
     "289",
     "",
+    "24",
+    "",
+    "",
+    "",
+    "3",
+    "1",
+    "",
+    "",
+    "",
+    "1",
     "",
     "",
     "",
     "",
+    "1",
     "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "1279",
-    "",
-    "",
+    "17",
+    "1",
+    "1",
     "",
     "129",
     "",
@@ -80,7 +80,7 @@
     "",
     "",
     "1279",
-    "",
+    "5689",
     "",
     "79"
   ],
@@ -176,7 +176,7 @@
       "row": 1,
       "col": 3,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "25"
     },
     {
       "index": 13,
@@ -260,7 +260,7 @@
       "row": 2,
       "col": 6,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "7"
     },
     {
       "index": 25,
@@ -302,7 +302,7 @@
       "row": 3,
       "col": 3,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "1"
     },
     {
       "index": 31,
@@ -323,21 +323,21 @@
       "row": 3,
       "col": 6,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "1"
     },
     {
       "index": 34,
       "row": 3,
       "col": 7,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "1"
     },
     {
       "index": 35,
       "row": 3,
       "col": 8,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "58"
     },
     {
       "index": 36,
@@ -351,7 +351,7 @@
       "row": 4,
       "col": 1,
       "digit": null,
-      "pencilmarks": "29"
+      "pencilmarks": ""
     },
     {
       "index": 38,
@@ -456,7 +456,7 @@
       "row": 5,
       "col": 7,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "24"
     },
     {
       "index": 53,
@@ -484,14 +484,14 @@
       "row": 6,
       "col": 2,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "3"
     },
     {
       "index": 57,
       "row": 6,
       "col": 3,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "1"
     },
     {
       "index": 58,
@@ -519,7 +519,7 @@
       "row": 6,
       "col": 7,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "1"
     },
     {
       "index": 62,
@@ -554,7 +554,7 @@
       "row": 7,
       "col": 3,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "1"
     },
     {
       "index": 67,
@@ -568,21 +568,21 @@
       "row": 7,
       "col": 5,
       "digit": null,
-      "pencilmarks": "1279"
+      "pencilmarks": "17"
     },
     {
       "index": 69,
       "row": 7,
       "col": 6,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "1"
     },
     {
       "index": 70,
       "row": 7,
       "col": 7,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "1"
     },
     {
       "index": 71,
@@ -638,7 +638,7 @@
       "row": 8,
       "col": 6,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "5689"
     },
     {
       "index": 79,
