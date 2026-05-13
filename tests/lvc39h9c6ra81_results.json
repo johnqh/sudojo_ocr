@@ -1,43 +1,43 @@
 {
   "image": "lvc39h9c6ra81.jpg",
-  "puzzle": "142000000363020400159040003600700000210004300800000001521008090073900005986000030",
+  "puzzle": "142000000363020400759840003600700000210004300800000001521008090473900005986000030",
   "pencilmarks": [
     "",
     "",
     "",
-    "6",
+    "",
     "569",
-    "569",
+    "3569",
     "56789",
     "5678",
-    "789",
+    "6789",
     "",
     "",
     "",
+    "",
+    "",
+    "179",
     "",
     "",
     "79",
     "",
     "",
-    "79",
     "",
     "",
     "",
     "",
-    "",
-    "",
-    "12",
-    "12",
+    "126",
+    "126",
     "",
     "",
     "",
     "45",
     "",
     "389",
-    "123",
+    "1239",
     "89",
-    "45",
-    "89",
+    "245",
+    "289",
     "",
     "",
     "",
@@ -46,20 +46,20 @@
     "",
     "",
     "56",
-    "89",
+    "689",
     "",
-    "",
+    "39",
     "45",
-    "6",
+    "",
     "56",
-    "2356",
+    "23569",
     "569",
-    "456",
+    "2456",
     "",
     "",
     "",
     "",
-    "4",
+    "",
     "",
     "",
     "",
@@ -71,8 +71,8 @@
     "",
     "",
     "",
-    "12",
-    "12",
+    "126",
+    "126",
     "",
     "",
     "",
@@ -84,8 +84,8 @@
     "",
     ""
   ],
-  "digitCount": 34,
-  "confidence": 74.95,
+  "digitCount": 36,
+  "confidence": 84.38,
   "cells": [
     {
       "index": 0,
@@ -113,7 +113,7 @@
       "row": 0,
       "col": 3,
       "digit": null,
-      "pencilmarks": "6"
+      "pencilmarks": ""
     },
     {
       "index": 4,
@@ -127,7 +127,7 @@
       "row": 0,
       "col": 5,
       "digit": null,
-      "pencilmarks": "569"
+      "pencilmarks": "3569"
     },
     {
       "index": 6,
@@ -148,7 +148,7 @@
       "row": 0,
       "col": 8,
       "digit": null,
-      "pencilmarks": "789"
+      "pencilmarks": "6789"
     },
     {
       "index": 9,
@@ -190,7 +190,7 @@
       "row": 1,
       "col": 5,
       "digit": null,
-      "pencilmarks": "79"
+      "pencilmarks": "179"
     },
     {
       "index": 15,
@@ -217,7 +217,7 @@
       "index": 18,
       "row": 2,
       "col": 0,
-      "digit": 1,
+      "digit": 7,
       "pencilmarks": ""
     },
     {
@@ -238,7 +238,7 @@
       "index": 21,
       "row": 2,
       "col": 3,
-      "digit": null,
+      "digit": 8,
       "pencilmarks": ""
     },
     {
@@ -260,14 +260,14 @@
       "row": 2,
       "col": 6,
       "digit": null,
-      "pencilmarks": "12"
+      "pencilmarks": "126"
     },
     {
       "index": 25,
       "row": 2,
       "col": 7,
       "digit": null,
-      "pencilmarks": "12"
+      "pencilmarks": "126"
     },
     {
       "index": 26,
@@ -316,7 +316,7 @@
       "row": 3,
       "col": 5,
       "digit": null,
-      "pencilmarks": "123"
+      "pencilmarks": "1239"
     },
     {
       "index": 33,
@@ -330,14 +330,14 @@
       "row": 3,
       "col": 7,
       "digit": null,
-      "pencilmarks": "45"
+      "pencilmarks": "245"
     },
     {
       "index": 35,
       "row": 3,
       "col": 8,
       "digit": null,
-      "pencilmarks": "89"
+      "pencilmarks": "289"
     },
     {
       "index": 36,
@@ -400,7 +400,7 @@
       "row": 4,
       "col": 8,
       "digit": null,
-      "pencilmarks": "89"
+      "pencilmarks": "689"
     },
     {
       "index": 45,
@@ -414,7 +414,7 @@
       "row": 5,
       "col": 1,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "39"
     },
     {
       "index": 47,
@@ -428,7 +428,7 @@
       "row": 5,
       "col": 3,
       "digit": null,
-      "pencilmarks": "6"
+      "pencilmarks": ""
     },
     {
       "index": 49,
@@ -442,7 +442,7 @@
       "row": 5,
       "col": 5,
       "digit": null,
-      "pencilmarks": "2356"
+      "pencilmarks": "23569"
     },
     {
       "index": 51,
@@ -456,7 +456,7 @@
       "row": 5,
       "col": 7,
       "digit": null,
-      "pencilmarks": "456"
+      "pencilmarks": "2456"
     },
     {
       "index": 53,
@@ -491,7 +491,7 @@
       "row": 6,
       "col": 3,
       "digit": null,
-      "pencilmarks": "4"
+      "pencilmarks": ""
     },
     {
       "index": 58,
@@ -532,7 +532,7 @@
       "index": 63,
       "row": 7,
       "col": 0,
-      "digit": null,
+      "digit": 4,
       "pencilmarks": ""
     },
     {
@@ -575,14 +575,14 @@
       "row": 7,
       "col": 6,
       "digit": null,
-      "pencilmarks": "12"
+      "pencilmarks": "126"
     },
     {
       "index": 70,
       "row": 7,
       "col": 7,
       "digit": null,
-      "pencilmarks": "12"
+      "pencilmarks": "126"
     },
     {
       "index": 71,
