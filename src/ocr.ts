@@ -330,7 +330,20 @@ async function recognizeSubCellPencilmarks(
             subData[dstIdx + 3] = binarizedData.data[srcIdx + 3] ?? 255;
           }
         }
-        if (isPencilmarkPresent({ data: subData, width: subW, height: subH })) {
+        // Connected component check with size filtering.
+        // Don't filter by border-touching (pencilmarks near sub-cell edges are
+        // legitimate), but require minimum pixel count and dimensions to exclude
+        // noise artifacts and grid line remnants.
+        const components = findConnectedComponents(
+          { data: subData, width: subW, height: subH },
+          25
+        );
+        const hasPencilmark = components.some((c) => {
+          const compH = c.maxY - c.minY + 1;
+          const compW = c.maxX - c.minX + 1;
+          return compH >= subH * 0.15 && compW >= subW * 0.08;
+        });
+        if (hasPencilmark) {
           digits.push(digit);
         }
       }
@@ -360,6 +373,7 @@ async function recognizeCellsPencilmark(
   const pencilmarkDigits: string[] = new Array(cells.length).fill('');
   const needsFallback: number[] = [];
   const needsSubCellOCR: number[] = [];
+  let sparseTextFoundPencilmarks = false;
 
   // Cache preprocessed data so we don't reprocess in later passes
   const preprocessed: Array<{
@@ -424,6 +438,7 @@ async function recognizeCellsPencilmark(
       results[i] = { digit: parseInt(best.text, 10), confidence: best.confidence };
     } else {
       // Pencilmarks — queue for sub-cell OCR
+      sparseTextFoundPencilmarks = true;
       needsSubCellOCR.push(i);
     }
 
@@ -488,9 +503,13 @@ async function recognizeCellsPencilmark(
 
       if (digit !== null) {
         results[i] = { digit, confidence };
-      } else {
-        // No digit — queue for sub-cell pencilmark OCR
+      } else if (sparseTextFoundPencilmarks) {
+        // No digit found, and the board has pencilmarks — try sub-cell OCR.
+        // Only enabled when SPARSE_TEXT found pencilmarks elsewhere, preventing
+        // false pencilmarks on digit-only boards.
         needsSubCellOCR.push(i);
+      } else {
+        results[i] = { digit: null, confidence: 0 };
       }
     }
   }
