@@ -211,7 +211,7 @@ function preprocessPencilmarkCell(
     h
   );
 
-  // Denoise, enhance contrast, then binarize.
+  // Denoise, enhance contrast, binarize.
   let imageData = adapter.getImageData(rawCanvas, 0, 0, w, h);
   imageData = medianFilter(imageData);
   imageData = enhanceContrast(imageData, 1.3);
