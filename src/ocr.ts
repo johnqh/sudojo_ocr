@@ -171,7 +171,7 @@ const BINARIZED_EMPTY_THRESHOLD = 0.005;
 const PENCILMARK_SUBCELL_MIN_CONFIDENCE = 10;
 
 /** Height ratio threshold: symbols taller than this fraction of cell height are given digits */
-const GIVEN_DIGIT_HEIGHT_RATIO = 0.4;
+const GIVEN_DIGIT_HEIGHT_RATIO = 0.45;
 
 /**
  * Upscale a cell for pencilmark processing.
@@ -435,12 +435,16 @@ async function recognizeCellsPencilmark(
       return symbolHeight > pp.height * GIVEN_DIGIT_HEIGHT_RATIO;
     });
 
-    if (largeSymbols.length > 0) {
-      // Given digit
+    if (largeSymbols.length > 0 && symbols.length <= 2) {
+      // Large symbol + few total symbols → confirmed digit
       const best = largeSymbols.reduce((a, b) =>
         a.confidence > b.confidence ? a : b
       );
       results[i] = { digit: parseInt(best.text, 10), confidence: best.confidence };
+    } else if (largeSymbols.length > 0) {
+      // Large symbol but many total symbols → pencilmarks misread as digit
+      sparseTextFoundPencilmarks = true;
+      needsSubCellOCR.push(i);
     } else {
       // Check if small symbols map to multiple distinct grid positions.
       // Pencilmarks occupy different 3x3 slots; digit fragments cluster together.
