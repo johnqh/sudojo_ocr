@@ -168,7 +168,7 @@ function processForOCR(
 const BINARIZED_EMPTY_THRESHOLD = 0.005;
 
 /** Minimum OCR confidence to accept a sub-cell pencilmark detection */
-const PENCILMARK_SUBCELL_MIN_CONFIDENCE = 15;
+const PENCILMARK_SUBCELL_MIN_CONFIDENCE = 10;
 
 /** Height ratio threshold: symbols taller than this fraction of cell height are given digits */
 const GIVEN_DIGIT_HEIGHT_RATIO = 0.4;
@@ -281,7 +281,7 @@ async function recognizeSubCellPencilmarks(
       const sx = col * subW;
       const sy = row * subH;
 
-      // Skip sub-cells with no ink
+      // Skip sub-cells with no ink (using binarized data which has grid lines removed)
       if (!subCellHasInk(binarizedData, sx, sy, subW, subH)) {
         continue;
       }
@@ -314,6 +314,25 @@ async function recognizeSubCellPencilmarks(
         }
       } catch {
         // Skip failed sub-cell
+      }
+
+      // Supplement: connected component ink detection on binarized sub-cell.
+      // Catches pencilmarks that OCR missed (especially thin strokes like "1", "7").
+      if (!digits.includes(digit)) {
+        const subData = new Uint8ClampedArray(subW * subH * 4);
+        for (let y = 0; y < subH; y++) {
+          for (let x = 0; x < subW; x++) {
+            const srcIdx = ((sy + y) * cellWidth + (sx + x)) * 4;
+            const dstIdx = (y * subW + x) * 4;
+            subData[dstIdx] = binarizedData.data[srcIdx] ?? 255;
+            subData[dstIdx + 1] = binarizedData.data[srcIdx + 1] ?? 255;
+            subData[dstIdx + 2] = binarizedData.data[srcIdx + 2] ?? 255;
+            subData[dstIdx + 3] = binarizedData.data[srcIdx + 3] ?? 255;
+          }
+        }
+        if (isPencilmarkPresent({ data: subData, width: subW, height: subH })) {
+          digits.push(digit);
+        }
       }
     }
   }
