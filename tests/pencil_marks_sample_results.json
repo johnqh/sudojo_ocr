@@ -28,7 +28,7 @@
     "",
     "7",
     "",
-    "",
+    "4",
     "",
     "",
     "",
@@ -49,7 +49,7 @@
     "2479",
     "1289",
     "1289",
-    "",
+    "4",
     "",
     "",
     "289",
@@ -70,7 +70,7 @@
     "",
     "1",
     "",
-    "17",
+    "1",
     "1",
     "1",
     "",
@@ -85,7 +85,7 @@
     "79"
   ],
   "digitCount": 37,
-  "confidence": 87.46,
+  "confidence": 87.37,
   "cells": [
     {
       "index": 0,
@@ -274,7 +274,7 @@
       "row": 2,
       "col": 8,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "4"
     },
     {
       "index": 27,
@@ -421,7 +421,7 @@
       "row": 5,
       "col": 2,
       "digit": null,
-      "pencilmarks": ""
+      "pencilmarks": "4"
     },
     {
       "index": 48,
@@ -568,7 +568,7 @@
       "row": 7,
       "col": 5,
       "digit": null,
-      "pencilmarks": "17"
+      "pencilmarks": "1"
     },
     {
       "index": 69,
