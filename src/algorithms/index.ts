@@ -8,6 +8,7 @@ export {
   cannyEdgeDetection,
   enhanceContrast,
   binarize,
+  adaptiveBinarize,
   dilate,
   preprocessForOCR,
   isCellEmpty,

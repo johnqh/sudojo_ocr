@@ -5,6 +5,7 @@ import {
   cannyEdgeDetection,
   enhanceContrast,
   binarize,
+  adaptiveBinarize,
   preprocessForOCR,
   isCellEmpty,
   removeGridLines,
@@ -374,5 +375,88 @@ describe('removeGridLines', () => {
     expect(isDark(result, 3, 9)).toBe(false);
     // Interior preserved
     expect(isDark(result, 5, 5)).toBe(true);
+  });
+});
+
+describe('adaptiveBinarize', () => {
+  function setPixel(
+    img: ImageDataLike,
+    x: number,
+    y: number,
+    r: number,
+    g: number,
+    b: number
+  ): void {
+    const idx = (y * img.width + x) * 4;
+    img.data[idx] = r;
+    img.data[idx + 1] = g;
+    img.data[idx + 2] = b;
+    img.data[idx + 3] = 255;
+  }
+
+  it('should binarize a bimodal image into black and white', () => {
+    // 10x10 image: left half dark (50), right half bright (200)
+    const img = createTestImageData(10, 10, { r: 200, g: 200, b: 200, a: 255 });
+    for (let y = 0; y < 10; y++) {
+      for (let x = 0; x < 10; x++) {
+        const val = x < 5 ? 50 : 200;
+        setPixel(img, x, y, val, val, val);
+      }
+    }
+    const result = adaptiveBinarize(img);
+    expect(result.width).toBe(10);
+    expect(result.height).toBe(10);
+
+    // Left half should be black (0), right half white (255)
+    for (let y = 0; y < 10; y++) {
+      for (let x = 0; x < 10; x++) {
+        const idx = (y * 10 + x) * 4;
+        if (x < 5) {
+          expect(result.data[idx]).toBe(0);
+        } else {
+          expect(result.data[idx]).toBe(255);
+        }
+      }
+    }
+  });
+
+  it('should treat uniform white image as all white', () => {
+    const img = createTestImageData(10, 10, { r: 255, g: 255, b: 255, a: 255 });
+    const result = adaptiveBinarize(img);
+    for (let i = 0; i < result.data.length; i += 4) {
+      expect(result.data[i]).toBe(255);
+    }
+  });
+
+  it('should treat uniform dark image as all black', () => {
+    const img = createTestImageData(10, 10, { r: 30, g: 30, b: 30, a: 255 });
+    const result = adaptiveBinarize(img);
+    for (let i = 0; i < result.data.length; i += 4) {
+      expect(result.data[i]).toBe(0);
+    }
+  });
+
+  it('should preserve alpha channel', () => {
+    const img = createTestImageData(4, 4, { r: 255, g: 255, b: 255, a: 255 });
+    // Set some pixels with specific alpha
+    const idx = 0;
+    img.data[idx + 3] = 128;
+    const result = adaptiveBinarize(img);
+    expect(result.data[idx + 3]).toBe(128);
+  });
+
+  it('should handle colored input (purple pencilmarks on white)', () => {
+    // Simulate purple pencilmark: RGB(128, 0, 128) on white
+    const img = createTestImageData(10, 10, { r: 255, g: 255, b: 255, a: 255 });
+    // Draw a purple mark in center
+    for (let y = 3; y < 7; y++) {
+      for (let x = 3; x < 7; x++) {
+        setPixel(img, x, y, 128, 0, 128);
+      }
+    }
+    const result = adaptiveBinarize(img);
+    // Purple mark should be dark (0), background should be white (255)
+    expect(result.data[(5 * 10 + 5) * 4]).toBe(0); // center of mark
+    expect(result.data[0]).toBe(255); // top-left corner (background)
   });
 });

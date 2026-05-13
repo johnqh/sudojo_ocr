@@ -55,6 +55,7 @@ export {
   cannyEdgeDetection,
   enhanceContrast,
   binarize,
+  adaptiveBinarize,
   preprocessForOCR,
   isCellEmpty,
   detectBoardRectangle,

@@ -216,6 +216,76 @@ export function binarize(
 }
 
 /**
+ * Adaptive binarization using Otsu's method.
+ * Automatically computes the optimal threshold to separate foreground (ink)
+ * from background by maximizing between-class variance of the grayscale histogram.
+ * Better than fixed-threshold binarization for images with varying contrast,
+ * colored ink (purple pencilmarks), or tinted backgrounds (blue shading).
+ * @param imageData - Source RGBA image data
+ * @returns Binarized ImageDataLike (black ink on white background)
+ */
+export function adaptiveBinarize(imageData: ImageDataLike): ImageDataLike {
+  const { data, width, height } = imageData;
+  const numPixels = width * height;
+  const newData = new Uint8ClampedArray(data.length);
+
+  // Convert to grayscale and build histogram
+  const gray = new Uint8Array(numPixels);
+  const histogram = new Uint32Array(256);
+
+  for (let i = 0; i < numPixels; i++) {
+    const idx = i * 4;
+    const g = Math.floor(
+      0.299 * safeGet(data, idx) +
+        0.587 * safeGet(data, idx + 1) +
+        0.114 * safeGet(data, idx + 2)
+    );
+    gray[i] = g;
+    histogram[g]++;
+  }
+
+  // Otsu's method: find threshold maximizing between-class variance
+  let totalSum = 0;
+  for (let i = 0; i < 256; i++) {
+    totalSum += i * (histogram[i] ?? 0);
+  }
+
+  let bestThreshold = 128;
+  let bestVariance = 0;
+  let w0 = 0;
+  let sum0 = 0;
+
+  for (let t = 0; t < 256; t++) {
+    w0 += histogram[t] ?? 0;
+    if (w0 === 0) continue;
+    const w1 = numPixels - w0;
+    if (w1 === 0) break;
+
+    sum0 += t * (histogram[t] ?? 0);
+    const mean0 = sum0 / w0;
+    const mean1 = (totalSum - sum0) / w1;
+    const variance = w0 * w1 * (mean0 - mean1) * (mean0 - mean1);
+
+    if (variance > bestVariance) {
+      bestVariance = variance;
+      bestThreshold = t;
+    }
+  }
+
+  // Binarize: pixels above threshold -> white, below -> black
+  for (let i = 0; i < numPixels; i++) {
+    const idx = i * 4;
+    const val = (gray[i] ?? 0) > bestThreshold ? 255 : 0;
+    newData[idx] = val;
+    newData[idx + 1] = val;
+    newData[idx + 2] = val;
+    newData[idx + 3] = safeGet(data, idx + 3);
+  }
+
+  return { data: newData, width, height };
+}
+
+/**
  * Preprocess image for OCR using contrast stretching with gamma correction.
  * Stretches pixel range to full 0-255, then applies gamma correction (gamma=0.8)
  * to brighten midtones while preserving dark digits.
