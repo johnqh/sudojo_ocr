@@ -336,12 +336,12 @@ async function recognizeSubCellPencilmarks(
         // noise artifacts and grid line remnants.
         const components = findConnectedComponents(
           { data: subData, width: subW, height: subH },
-          25
+          50
         );
         const hasPencilmark = components.some((c) => {
           const compH = c.maxY - c.minY + 1;
           const compW = c.maxX - c.minX + 1;
-          return compH >= subH * 0.15 && compW >= subW * 0.08;
+          return compH >= subH * 0.25 && compW >= subW * 0.12;
         });
         if (hasPencilmark) {
           digits.push(digit);
