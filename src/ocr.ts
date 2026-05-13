@@ -32,7 +32,6 @@ import {
   parseDigitFromText,
   removeGridLines,
   findConnectedComponents,
-  isPencilmarkPresent,
 } from './algorithms/index.js';
 
 /**
@@ -199,9 +198,16 @@ function preprocessPencilmarkCell(
   const rawCanvas = adapter.createCanvas(w, h);
   adapter.fillRect(rawCanvas, 'white', 0, 0, w, h);
   adapter.drawImage(
-    rawCanvas, cellCanvas,
-    0, 0, cellCanvas.width, cellCanvas.height,
-    0, 0, w, h
+    rawCanvas,
+    cellCanvas,
+    0,
+    0,
+    cellCanvas.width,
+    cellCanvas.height,
+    0,
+    0,
+    w,
+    h
   );
 
   // Binarize for SPARSE_TEXT and classification
@@ -213,7 +219,13 @@ function preprocessPencilmarkCell(
   const binarizedCanvas = adapter.createCanvas(w, h);
   adapter.putImageData(binarizedCanvas, imageData, 0, 0);
 
-  return { rawCanvas, binarizedCanvas, binarizedData: imageData, width: w, height: h };
+  return {
+    rawCanvas,
+    binarizedCanvas,
+    binarizedData: imageData,
+    width: w,
+    height: h,
+  };
 }
 
 /**
@@ -235,7 +247,10 @@ function isBinarizedCellEmpty(imageData: ImageDataLike): boolean {
  */
 function subCellHasInk(
   imageData: ImageDataLike,
-  sx: number, sy: number, sw: number, sh: number
+  sx: number,
+  sy: number,
+  sw: number,
+  sh: number
 ): boolean {
   const { data, width } = imageData;
   let darkCount = 0;
@@ -261,7 +276,12 @@ async function recognizeSubCellPencilmarks(
   binarizedData: ImageDataLike,
   cellWidth: number,
   cellHeight: number,
-  worker: { setParameters: (p: any) => Promise<void>; recognize: (image: any) => Promise<{ data: { text: string; confidence?: number } }> },
+  worker: {
+    setParameters: (p: any) => Promise<void>;
+    recognize: (
+      image: any
+    ) => Promise<{ data: { text: string; confidence?: number } }>;
+  },
   tesseractPSM: { SINGLE_CHAR: number },
   toTesseractInput: (canvas: CanvasLike) => unknown
 ): Promise<number[]> {
@@ -295,9 +315,16 @@ async function recognizeSubCellPencilmarks(
       const subCanvas = adapter.createCanvas(scaledW, scaledH);
       adapter.fillRect(subCanvas, 'white', 0, 0, scaledW, scaledH);
       adapter.drawImage(
-        subCanvas, rawCanvas,
-        sx, sy, subW, subH,
-        0, 0, scaledW, scaledH
+        subCanvas,
+        rawCanvas,
+        sx,
+        sy,
+        subW,
+        subH,
+        0,
+        0,
+        scaledW,
+        scaledH
       );
 
       // Smaller padding so the digit fills more of the image
@@ -406,7 +433,13 @@ async function recognizeCellsPencilmark(
     // Empty check — use both binarized and raw checks.
     // Only skip if BOTH agree the cell is empty (adaptive binarize can
     // fail on colored images, producing false empties).
-    const rawImageData = adapter.getImageData(cell, 0, 0, cell.width, cell.height);
+    const rawImageData = adapter.getImageData(
+      cell,
+      0,
+      0,
+      cell.width,
+      cell.height
+    );
     if (isBinarizedCellEmpty(pp.binarizedData) && isCellEmpty(rawImageData)) {
       results[i] = { digit: null, confidence: 100 };
       onProgress?.(((i + 1) / cells.length) * 50);
@@ -414,7 +447,11 @@ async function recognizeCellsPencilmark(
     }
 
     // Run SPARSE_TEXT on binarized+padded cell
-    const paddedCanvas = addPadding(adapter, pp.binarizedCanvas, OCR_CELL_PADDING);
+    const paddedCanvas = addPadding(
+      adapter,
+      pp.binarizedCanvas,
+      OCR_CELL_PADDING
+    );
     const tesseractInput = adapter.toTesseractInput(paddedCanvas);
     const { data } = await worker.recognize(tesseractInput as any);
     const symbols: TesseractSymbol[] = (
@@ -440,7 +477,10 @@ async function recognizeCellsPencilmark(
       const best = largeSymbols.reduce((a, b) =>
         a.confidence > b.confidence ? a : b
       );
-      results[i] = { digit: parseInt(best.text, 10), confidence: best.confidence };
+      results[i] = {
+        digit: parseInt(best.text, 10),
+        confidence: best.confidence,
+      };
     } else if (largeSymbols.length > 0) {
       // Large symbol but many total symbols → pencilmarks misread as digit
       sparseTextFoundPencilmarks = true;
@@ -510,7 +550,9 @@ async function recognizeCellsPencilmark(
             confidence = dilConf;
           }
         }
-      } catch { /* failed */ }
+      } catch {
+        /* failed */
+      }
 
       // Attempt 2: adaptive binarize — high confidence threshold
       if (digit === null) {
@@ -530,7 +572,9 @@ async function recognizeCellsPencilmark(
               digit = parseInt(text, 10);
               confidence = conf;
             }
-          } catch { /* failed */ }
+          } catch {
+            /* failed */
+          }
         }
       }
 
