@@ -182,6 +182,7 @@ export interface TesseractModule {
   ) => Promise<TesseractWorker>;
   PSM: {
     SINGLE_CHAR: number;
+    SINGLE_BLOCK: number;
     SPARSE_TEXT: number;
   };
 }

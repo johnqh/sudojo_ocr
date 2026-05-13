@@ -388,9 +388,11 @@ async function recognizeCellsPencilmark(
     logger: () => {},
   });
 
-  // === Pass 1: SPARSE_TEXT classification ===
+  // === Pass 1: SINGLE_BLOCK classification ===
+  // SINGLE_BLOCK reads digits more accurately than SPARSE_TEXT (e.g., 8 vs 3)
+  // and still detects scattered pencilmark characters in cells
   await worker.setParameters({
-    tessedit_pageseg_mode: tesseract.PSM.SPARSE_TEXT,
+    tessedit_pageseg_mode: tesseract.PSM.SINGLE_BLOCK,
     tessedit_char_whitelist: '123456789',
   });
 
@@ -401,8 +403,11 @@ async function recognizeCellsPencilmark(
     const pp = preprocessPencilmarkCell(adapter, cell);
     preprocessed[i] = pp;
 
-    // Empty check
-    if (isBinarizedCellEmpty(pp.binarizedData)) {
+    // Empty check — use both binarized and raw checks.
+    // Only skip if BOTH agree the cell is empty (adaptive binarize can
+    // fail on colored images, producing false empties).
+    const rawImageData = adapter.getImageData(cell, 0, 0, cell.width, cell.height);
+    if (isBinarizedCellEmpty(pp.binarizedData) && isCellEmpty(rawImageData)) {
       results[i] = { digit: null, confidence: 100 };
       onProgress?.(((i + 1) / cells.length) * 50);
       continue;
@@ -437,9 +442,28 @@ async function recognizeCellsPencilmark(
       );
       results[i] = { digit: parseInt(best.text, 10), confidence: best.confidence };
     } else {
-      // Pencilmarks — queue for sub-cell OCR
-      sparseTextFoundPencilmarks = true;
-      needsSubCellOCR.push(i);
+      // Check if small symbols map to multiple distinct grid positions.
+      // Pencilmarks occupy different 3x3 slots; digit fragments cluster together.
+      const slotW = pp.width / 3;
+      const slotH = pp.height / 3;
+      const pad = OCR_CELL_PADDING;
+      const uniqueSlots = new Set<number>();
+      for (const s of symbols) {
+        const cx = (s.bbox.x0 + s.bbox.x1) / 2 - pad;
+        const cy = (s.bbox.y0 + s.bbox.y1) / 2 - pad;
+        const gc = Math.min(2, Math.max(0, Math.floor(cx / slotW)));
+        const gr = Math.min(2, Math.max(0, Math.floor(cy / slotH)));
+        uniqueSlots.add(gr * 3 + gc + 1);
+      }
+
+      if (uniqueSlots.size >= 2) {
+        // Multiple grid positions → pencilmarks
+        sparseTextFoundPencilmarks = true;
+        needsSubCellOCR.push(i);
+      } else {
+        // Single grid position → likely a digit fragment → fallback
+        needsFallback.push(i);
+      }
     }
 
     onProgress?.(((i + 1) / cells.length) * 50);
@@ -459,7 +483,7 @@ async function recognizeCellsPencilmark(
       let digit: number | null = null;
       let confidence = 0;
 
-      // Attempt 1: processForOCR
+      // Attempt 1: processForOCR (standard binarize)
       try {
         const processedCell = processForOCR(adapter, cell);
         const input = adapter.toTesseractInput(processedCell);
@@ -469,6 +493,7 @@ async function recognizeCellsPencilmark(
         const parsed = parseDigitFromText(text);
         if (parsed !== null && confidence >= 1) digit = parsed;
 
+        // Retry with dilation for thin strokes
         if (digit === null) {
           const dilated = processForOCR(adapter, cell, true);
           const dilInput = adapter.toTesseractInput(dilated);
@@ -483,12 +508,16 @@ async function recognizeCellsPencilmark(
         }
       } catch { /* failed */ }
 
-      // Attempt 2: adaptive binarize
+      // Attempt 2: adaptive binarize — high confidence threshold
       if (digit === null) {
         const pp = preprocessed[i];
         if (pp) {
           try {
-            const paddedCanvas = addPadding(adapter, pp.binarizedCanvas, OCR_CELL_PADDING);
+            const paddedCanvas = addPadding(
+              adapter,
+              pp.binarizedCanvas,
+              OCR_CELL_PADDING
+            );
             const input = adapter.toTesseractInput(paddedCanvas);
             const { data } = await worker.recognize(input as any);
             const text = data.text.trim();
@@ -504,9 +533,6 @@ async function recognizeCellsPencilmark(
       if (digit !== null) {
         results[i] = { digit, confidence };
       } else if (sparseTextFoundPencilmarks) {
-        // No digit found, and the board has pencilmarks — try sub-cell OCR.
-        // Only enabled when SPARSE_TEXT found pencilmarks elsewhere, preventing
-        // false pencilmarks on digit-only boards.
         needsSubCellOCR.push(i);
       } else {
         results[i] = { digit: null, confidence: 0 };
