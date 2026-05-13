@@ -5,6 +5,7 @@
 import type {
   CanvasAdapter,
   CanvasLike,
+  ImageDataLike,
   OCRConfig,
   OCRResult,
   OCRProgress,
@@ -30,6 +31,8 @@ import {
   isCellEmpty,
   parseDigitFromText,
   removeGridLines,
+  findConnectedComponents,
+  isPencilmarkPresent,
 } from './algorithms/index.js';
 
 /**
@@ -161,11 +164,18 @@ function processForOCR(
   return addPadding(adapter, processedCanvas, OCR_CELL_PADDING);
 }
 
+/** Minimum dark pixel ratio to consider a binarized cell non-empty */
+const BINARIZED_EMPTY_THRESHOLD = 0.005;
+
+/** Minimum dark pixel ratio in a sub-cell to detect a pencilmark via ink */
+const PENCILMARK_INK_THRESHOLD = 0.02;
+
 /**
  * Preprocess a cell for pencilmark OCR.
  * Upscales, enhances contrast, binarizes adaptively (Otsu), removes grid lines,
  * and adds padding. Returns the processed canvas plus inner dimensions
- * (before padding) needed for bounding box coordinate mapping.
+ * (before padding) needed for bounding box coordinate mapping, and the
+ * binarized inner image data for ink detection.
  */
 function preprocessPencilmarkCell(
   adapter: CanvasAdapter,
@@ -175,6 +185,7 @@ function preprocessPencilmarkCell(
   innerWidth: number;
   innerHeight: number;
   padding: number;
+  innerImageData: ImageDataLike;
 } {
   // Upscale so shortest dimension >= OCR_PENCILMARK_TARGET_CELL_SIZE
   const scale = Math.max(
@@ -200,7 +211,9 @@ function preprocessPencilmarkCell(
     scaledHeight
   );
 
-  // Enhance contrast -> adaptive binarize -> remove grid lines
+  // Adaptive binarize (Otsu finds optimal threshold) -> remove grid lines
+  // No contrast enhancement: Otsu handles varying contrast natively,
+  // and enhanceContrast can create artifacts that cause false pencilmark detections.
   let imageData = adapter.getImageData(
     scaledCanvas,
     0,
@@ -208,9 +221,10 @@ function preprocessPencilmarkCell(
     scaledWidth,
     scaledHeight
   );
-  imageData = enhanceContrast(imageData, OCR_CONTRAST_FACTOR);
   imageData = adaptiveBinarize(imageData);
-  imageData = removeGridLines(imageData, 3, 3);
+  // Scale grid line removal depth with cell size (3px at 100px, ~6px at 200px)
+  const gridLineDepth = Math.max(3, Math.floor(scaledWidth * 0.03));
+  imageData = removeGridLines(imageData, gridLineDepth, 3);
 
   const processedCanvas = adapter.createCanvas(scaledWidth, scaledHeight);
   adapter.putImageData(processedCanvas, imageData, 0, 0);
@@ -224,7 +238,71 @@ function preprocessPencilmarkCell(
     innerWidth: scaledWidth,
     innerHeight: scaledHeight,
     padding,
+    innerImageData: imageData,
   };
+}
+
+/**
+ * Check if a binarized cell is empty by counting dark pixels.
+ * More robust than stdDev-based isCellEmpty for colored images
+ * (e.g., blue digits on blue-tinted backgrounds).
+ */
+function isBinarizedCellEmpty(imageData: ImageDataLike): boolean {
+  const { data, width, height } = imageData;
+  const total = width * height;
+  let darkCount = 0;
+  for (let i = 0; i < total; i++) {
+    if ((data[i * 4] ?? 255) < 128) darkCount++;
+  }
+  return darkCount / total < BINARIZED_EMPTY_THRESHOLD;
+}
+
+/**
+ * Detect pencilmark positions by scanning each 3x3 sub-cell for connected
+ * dark components. More robust than pixel-ratio ink detection: requires
+ * a coherent shape (3+ connected pixels) that doesn't touch the sub-cell
+ * border (filtering grid line remnants and margin artifacts).
+ * @returns Sorted array of detected digit numbers (e.g., [1, 3, 7])
+ */
+function detectPencilmarksByInk(imageData: ImageDataLike): number[] {
+  const { data, width, height } = imageData;
+  const subW = Math.floor(width / 3);
+  const subH = Math.floor(height / 3);
+  const digits: number[] = [];
+
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 3; col++) {
+      const digit = row * 3 + col + 1;
+
+      // Extract sub-cell image data
+      const sx = col * subW;
+      const sy = row * subH;
+      const subData = new Uint8ClampedArray(subW * subH * 4);
+
+      for (let y = 0; y < subH; y++) {
+        for (let x = 0; x < subW; x++) {
+          const srcIdx = ((sy + y) * width + (sx + x)) * 4;
+          const dstIdx = (y * subW + x) * 4;
+          subData[dstIdx] = data[srcIdx] ?? 255;
+          subData[dstIdx + 1] = data[srcIdx + 1] ?? 255;
+          subData[dstIdx + 2] = data[srcIdx + 2] ?? 255;
+          subData[dstIdx + 3] = data[srcIdx + 3] ?? 255;
+        }
+      }
+
+      const subImage: ImageDataLike = {
+        data: subData,
+        width: subW,
+        height: subH,
+      };
+
+      if (isPencilmarkPresent(subImage)) {
+        digits.push(digit);
+      }
+    }
+  }
+
+  return digits;
 }
 
 /**
@@ -296,23 +374,16 @@ async function recognizeCellsPencilmark(
     const cell = cells[i];
     if (!cell) continue;
 
-    // Quick empty check before expensive OCR
-    const cellImageData = adapter.getImageData(
-      cell,
-      0,
-      0,
-      cell.width,
-      cell.height
-    );
-    if (isCellEmpty(cellImageData)) {
+    // Preprocess cell (adaptive binarize handles colored images)
+    const { canvas, innerWidth, innerHeight, padding, innerImageData } =
+      preprocessPencilmarkCell(adapter, cell);
+
+    // Empty check on binarized image (robust to colored backgrounds)
+    if (isBinarizedCellEmpty(innerImageData)) {
       results[i] = { digit: null, confidence: 100 };
       onProgress?.(((i + 1) / cells.length) * 100);
       continue;
     }
-
-    // Preprocess cell for pencilmark OCR
-    const { canvas, innerWidth, innerHeight, padding } =
-      preprocessPencilmarkCell(adapter, cell);
 
     const tesseractInput = adapter.toTesseractInput(canvas);
     const { data } = await worker.recognize(tesseractInput as any);
@@ -343,13 +414,19 @@ async function recognizeCellsPencilmark(
       const digit = parseInt(best.text, 10);
       results[i] = { digit, confidence: best.confidence };
     } else {
-      // Pencilmarks — map symbol positions to 3x3 grid
-      const digits = mapSymbolsToGridPositions(
+      // Pencilmarks — merge SPARSE_TEXT positions with ink detection
+      const ocrPositions = mapSymbolsToGridPositions(
         symbols,
         innerWidth,
         innerHeight,
         padding
       );
+      const inkPositions = detectPencilmarksByInk(innerImageData);
+
+      // Union of both detection methods
+      const merged = new Set([...ocrPositions, ...inkPositions]);
+      const digits = [...merged].sort((a, b) => a - b);
+
       pencilmarkDigits[i] = digits.join('');
       results[i] = { digit: null, confidence: 0 };
     }
@@ -368,13 +445,13 @@ async function recognizeCellsPencilmark(
       const cell = cells[i];
       if (!cell) continue;
 
-      const processedCell = processForOCR(adapter, cell);
-      const tesseractInput = adapter.toTesseractInput(processedCell);
-
       let digit: number | null = null;
       let confidence = 0;
 
+      // Attempt 1: processForOCR (standard binarize) — good for clear digits
       try {
+        const processedCell = processForOCR(adapter, cell);
+        const tesseractInput = adapter.toTesseractInput(processedCell);
         const { data } = await worker.recognize(tesseractInput as any);
         const text = data.text.trim();
         confidence = data.confidence || 0;
@@ -383,7 +460,7 @@ async function recognizeCellsPencilmark(
           digit = parsedDigit;
         }
 
-        // Retry with dilation if needed
+        // Retry with dilation for thin strokes
         if (digit === null) {
           const dilatedCell = processForOCR(adapter, cell, true);
           const dilatedInput = adapter.toTesseractInput(dilatedCell);
@@ -397,10 +474,54 @@ async function recognizeCellsPencilmark(
           }
         }
       } catch {
-        // Fallback failed — treat as empty
+        // Standard preprocessing failed
       }
 
-      results[i] = { digit, confidence };
+      // Attempt 2: adaptive binarize — handles colored/tinted images
+      // Higher confidence threshold to avoid misreading pencilmarks as digits
+      if (digit === null) {
+        try {
+          const { canvas: adaptiveCanvas } = preprocessPencilmarkCell(
+            adapter,
+            cell
+          );
+          const adaptiveInput = adapter.toTesseractInput(adaptiveCanvas);
+          const { data } = await worker.recognize(adaptiveInput as any);
+          const text = data.text.trim();
+          const conf = data.confidence || 0;
+          if (/^[1-9]$/.test(text) && conf >= 50) {
+            digit = parseInt(text, 10);
+            confidence = conf;
+          }
+        } catch {
+          // Adaptive preprocessing also failed
+        }
+      }
+
+      if (digit !== null) {
+        results[i] = { digit, confidence };
+      } else {
+        // No digit found — try ink detection for pencilmarks.
+        // First verify the cell looks like pencilmarks, not a large digit
+        // that both OCR passes failed to read.
+        const { innerImageData: fallbackImageData } =
+          preprocessPencilmarkCell(adapter, cell);
+        const components = findConnectedComponents(fallbackImageData);
+        const hasLargeComponent = components.some(
+          (c) =>
+            c.maxY - c.minY + 1 >
+            fallbackImageData.height * GIVEN_DIGIT_HEIGHT_RATIO
+        );
+
+        if (!hasLargeComponent && components.length >= 2) {
+          // Multiple small components → likely pencilmarks
+          const inkDigits = detectPencilmarksByInk(fallbackImageData);
+          if (inkDigits.length >= 2) {
+            pencilmarkDigits[i] = inkDigits.join('');
+          }
+        }
+        results[i] = { digit: null, confidence: 0 };
+      }
     }
   }
 
