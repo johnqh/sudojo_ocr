@@ -62,7 +62,7 @@ export const OCR_PENCILMARK_MIN_INK_RATIO = 0.03;
 /** Cell margin for pencilmark mode — minimal trim, grid line removal handles the rest */
 export const OCR_PENCILMARK_CELL_MARGIN = 0.03;
 
-/** Target minimum cell dimension for pencilmark OCR (px) — larger than standard for small text */
+/** Target minimum cell dimension for pencilmark OCR (px) — 3x upscale for optimal Tesseract accuracy */
 export const OCR_PENCILMARK_TARGET_CELL_SIZE = 200;
 
 /** Rectangle bounds */

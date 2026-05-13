@@ -9,6 +9,7 @@ export {
   enhanceContrast,
   binarize,
   adaptiveBinarize,
+  medianFilter,
   dilate,
   preprocessForOCR,
   isCellEmpty,

@@ -286,6 +286,46 @@ export function adaptiveBinarize(imageData: ImageDataLike): ImageDataLike {
 }
 
 /**
+ * Denoise an image using a 3x3 median filter.
+ * Removes salt-and-pepper noise while preserving edges better than
+ * Gaussian blur. Important for OCR: noise creates artifacts during
+ * binarization that confuse Tesseract.
+ * @param imageData - Source RGBA image data
+ * @returns Denoised ImageDataLike
+ */
+export function medianFilter(imageData: ImageDataLike): ImageDataLike {
+  const { data, width, height } = imageData;
+  const newData = new Uint8ClampedArray(data.length);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+
+      if (y === 0 || y === height - 1 || x === 0 || x === width - 1) {
+        // Border pixels: copy as-is
+        for (let c = 0; c < 4; c++) newData[idx + c] = safeGet(data, idx + c);
+        continue;
+      }
+
+      // Collect 3x3 neighborhood for each channel
+      for (let c = 0; c < 3; c++) {
+        const values: number[] = [];
+        for (let ky = -1; ky <= 1; ky++) {
+          for (let kx = -1; kx <= 1; kx++) {
+            values.push(safeGet(data, ((y + ky) * width + (x + kx)) * 4 + c));
+          }
+        }
+        values.sort((a, b) => a - b);
+        newData[idx + c] = values[4]!; // Median of 9 values
+      }
+      newData[idx + 3] = safeGet(data, idx + 3);
+    }
+  }
+
+  return { data: newData, width, height };
+}
+
+/**
  * Preprocess image for OCR using contrast stretching with gamma correction.
  * Stretches pixel range to full 0-255, then applies gamma correction (gamma=0.8)
  * to brighten midtones while preserving dark digits.

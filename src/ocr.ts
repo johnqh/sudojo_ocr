@@ -27,6 +27,7 @@ import {
   enhanceContrast,
   binarize,
   adaptiveBinarize,
+  medianFilter,
   dilate,
   isCellEmpty,
   parseDigitFromText,
@@ -210,8 +211,10 @@ function preprocessPencilmarkCell(
     h
   );
 
-  // Binarize for SPARSE_TEXT and classification
+  // Denoise, enhance contrast, then binarize.
   let imageData = adapter.getImageData(rawCanvas, 0, 0, w, h);
+  imageData = medianFilter(imageData);
+  imageData = enhanceContrast(imageData, 1.3);
   imageData = adaptiveBinarize(imageData);
   const gridLineDepth = Math.max(3, Math.floor(w * 0.03));
   imageData = removeGridLines(imageData, gridLineDepth, 3);
