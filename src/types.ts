@@ -62,6 +62,9 @@ export const OCR_PENCILMARK_MIN_INK_RATIO = 0.03;
 /** Cell margin for pencilmark mode — minimal trim, grid line removal handles the rest */
 export const OCR_PENCILMARK_CELL_MARGIN = 0.03;
 
+/** Target minimum cell dimension for pencilmark OCR (px) — larger than standard for small text */
+export const OCR_PENCILMARK_TARGET_CELL_SIZE = 200;
+
 /** Rectangle bounds */
 export interface Rectangle {
   left: number;
@@ -151,6 +154,21 @@ export interface ImageDataLike {
   height: number;
 }
 
+/** Bounding box for a recognized Tesseract symbol */
+export interface TesseractSymbolBbox {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** A single recognized character with position and confidence */
+export interface TesseractSymbol {
+  text: string;
+  confidence: number;
+  bbox: TesseractSymbolBbox;
+}
+
 /**
  * Minimal Tesseract.js interface that works with both v5 and v7
  * This allows the library to be used with any compatible version
@@ -164,6 +182,7 @@ export interface TesseractModule {
   ) => Promise<TesseractWorker>;
   PSM: {
     SINGLE_CHAR: number;
+    SPARSE_TEXT: number;
   };
 }
 
@@ -175,6 +194,7 @@ export interface TesseractWorker {
     data: {
       text: string;
       confidence?: number;
+      symbols?: TesseractSymbol[];
     };
   }>;
   terminate: () => Promise<void>;

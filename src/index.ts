@@ -35,6 +35,8 @@ export type {
   ImageDataLike,
   TesseractModule,
   TesseractWorker,
+  TesseractSymbolBbox,
+  TesseractSymbol,
 } from './types.js';
 
 export { DEFAULT_OCR_CONFIG } from './types.js';
