@@ -1,6 +1,6 @@
 {
   "image": "pencilmarks-full.png",
-  "puzzle": "050000300217550000300900000805200600900300000000000040000000500000450000065071002",
+  "puzzle": "050000300217580000300900700800200600904300000000000240001000500000450000060071902",
   "pencilmarks": [
     "146",
     "",
@@ -26,12 +26,12 @@
     "",
     "1246",
     "246",
-    "145678",
+    "",
     "12568",
     "14568",
     "",
     "37",
-    "",
+    "35",
     "",
     "149",
     "4579",
@@ -40,7 +40,7 @@
     "13579",
     "",
     "27",
-    "589",
+    "",
     "",
     "16",
     "5678",
@@ -53,12 +53,12 @@
     "1678",
     "169",
     "56789",
-    "124578",
+    "",
     "",
     "135789",
     "1457",
     "234789",
-    "58",
+    "",
     "168",
     "2369",
     "23689",
@@ -76,16 +76,16 @@
     "13678",
     "45",
     "",
-    "",
+    "358",
     "8",
     "",
     "",
-    "1456789",
+    "",
     "358",
     ""
   ],
-  "digitCount": 24,
-  "confidence": 61.1,
+  "digitCount": 27,
+  "confidence": 92.66,
   "cells": [
     {
       "index": 0,
@@ -182,7 +182,7 @@
       "index": 13,
       "row": 1,
       "col": 4,
-      "digit": 5,
+      "digit": 8,
       "pencilmarks": ""
     },
     {
@@ -259,8 +259,8 @@
       "index": 24,
       "row": 2,
       "col": 6,
-      "digit": null,
-      "pencilmarks": "145678"
+      "digit": 7,
+      "pencilmarks": ""
     },
     {
       "index": 25,
@@ -294,8 +294,8 @@
       "index": 29,
       "row": 3,
       "col": 2,
-      "digit": 5,
-      "pencilmarks": ""
+      "digit": null,
+      "pencilmarks": "35"
     },
     {
       "index": 30,
@@ -357,8 +357,8 @@
       "index": 38,
       "row": 4,
       "col": 2,
-      "digit": null,
-      "pencilmarks": "589"
+      "digit": 4,
+      "pencilmarks": ""
     },
     {
       "index": 39,
@@ -448,8 +448,8 @@
       "index": 51,
       "row": 5,
       "col": 6,
-      "digit": null,
-      "pencilmarks": "124578"
+      "digit": 2,
+      "pencilmarks": ""
     },
     {
       "index": 52,
@@ -483,8 +483,8 @@
       "index": 56,
       "row": 6,
       "col": 2,
-      "digit": null,
-      "pencilmarks": "58"
+      "digit": 1,
+      "pencilmarks": ""
     },
     {
       "index": 57,
@@ -609,8 +609,8 @@
       "index": 74,
       "row": 8,
       "col": 2,
-      "digit": 5,
-      "pencilmarks": ""
+      "digit": null,
+      "pencilmarks": "358"
     },
     {
       "index": 75,
@@ -637,8 +637,8 @@
       "index": 78,
       "row": 8,
       "col": 6,
-      "digit": null,
-      "pencilmarks": "1456789"
+      "digit": 9,
+      "pencilmarks": ""
     },
     {
       "index": 79,
