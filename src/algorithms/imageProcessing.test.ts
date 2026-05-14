@@ -9,6 +9,7 @@ import {
   preprocessForOCR,
   isCellEmpty,
   removeGridLines,
+  removeEdgeSpanningLines,
 } from './imageProcessing.js';
 import type { ImageDataLike } from '../types.js';
 
@@ -375,6 +376,67 @@ describe('removeGridLines', () => {
     expect(isDark(result, 3, 9)).toBe(false);
     // Interior preserved
     expect(isDark(result, 5, 5)).toBe(true);
+  });
+});
+
+describe('removeEdgeSpanningLines', () => {
+  function createBinarizedImage(
+    width: number,
+    height: number,
+    darkPixels: [number, number][]
+  ): ImageDataLike {
+    const data = new Uint8ClampedArray(width * height * 4);
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = 255;
+      data[i + 1] = 255;
+      data[i + 2] = 255;
+      data[i + 3] = 255;
+    }
+    for (const [x, y] of darkPixels) {
+      const idx = (y * width + x) * 4;
+      data[idx] = 0;
+      data[idx + 1] = 0;
+      data[idx + 2] = 0;
+      data[idx + 3] = 255;
+    }
+    return { data, width, height };
+  }
+
+  function isDark(imageData: ImageDataLike, x: number, y: number): boolean {
+    const idx = (y * imageData.width + x) * 4;
+    return (imageData.data[idx] ?? 255) < 128;
+  }
+
+  it('should remove a thin vertical edge line inside the crop', () => {
+    const pixels: [number, number][] = [];
+    for (let y = 0; y < 30; y++) {
+      pixels.push([1, y]);
+    }
+    pixels.push([15, 12], [16, 12], [15, 13], [16, 13]);
+
+    const result = removeEdgeSpanningLines(
+      createBinarizedImage(30, 30, pixels)
+    );
+
+    expect(isDark(result, 1, 5)).toBe(false);
+    expect(isDark(result, 1, 20)).toBe(false);
+    expect(isDark(result, 15, 12)).toBe(true);
+    expect(isDark(result, 16, 13)).toBe(true);
+  });
+
+  it('should preserve a tall central digit-like stroke', () => {
+    const pixels: [number, number][] = [];
+    for (let y = 2; y < 18; y++) {
+      pixels.push([9, y]);
+      pixels.push([10, y]);
+    }
+
+    const result = removeEdgeSpanningLines(
+      createBinarizedImage(20, 20, pixels)
+    );
+
+    expect(isDark(result, 9, 5)).toBe(true);
+    expect(isDark(result, 10, 15)).toBe(true);
   });
 });
 

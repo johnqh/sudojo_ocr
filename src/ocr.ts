@@ -32,6 +32,7 @@ import {
   isCellEmpty,
   parseDigitFromText,
   removeGridLines,
+  removeEdgeSpanningLines,
   findConnectedComponents,
 } from './algorithms/index.js';
 
@@ -172,6 +173,170 @@ const PENCILMARK_SUBCELL_MIN_CONFIDENCE = 10;
 
 /** Height ratio threshold: symbols taller than this fraction of cell height are given digits */
 const GIVEN_DIGIT_HEIGHT_RATIO = 0.45;
+/** Minimum confidence for a strong whole-cell OCR digit read in fallback */
+const WHOLE_CELL_STRONG_MIN_CONFIDENCE = 50;
+
+/**
+ * Whole-cell OCR fallback should be stricter than generic text parsing.
+ * Multi-character strings like "79" are evidence of pencilmarks, not a given digit.
+ */
+function parseSingleDigitCandidate(text: string): number | null {
+  const cleanText = text.trim();
+  if (cleanText.length !== 1) {
+    return null;
+  }
+  return parseDigitFromText(cleanText);
+}
+
+interface WholeCellDigitEvidence {
+  digit: number | null;
+  confidence: number;
+  votes: number;
+  observedDigit: number | null;
+  observedConfidence: number;
+  observedVotes: number;
+}
+
+async function collectWholeCellDigitEvidence(
+  adapter: CanvasAdapter,
+  cell: CanvasLike,
+  pp:
+    | {
+        binarizedCanvas: CanvasLike;
+        binarizedData: ImageDataLike;
+      }
+    | undefined,
+  worker: {
+    recognize: (
+      image: any
+    ) => Promise<{ data: { text: string; confidence?: number } }>;
+  },
+  toTesseractInput: (canvas: CanvasLike) => unknown
+): Promise<WholeCellDigitEvidence> {
+  const digitVotes = new Map<number, number>();
+  const bestConfidenceByDigit = new Map<number, number>();
+
+  const recordDigitVote = (candidate: number | null, conf: number): void => {
+    if (candidate === null) return;
+    digitVotes.set(candidate, (digitVotes.get(candidate) ?? 0) + 1);
+    bestConfidenceByDigit.set(
+      candidate,
+      Math.max(bestConfidenceByDigit.get(candidate) ?? 0, conf)
+    );
+  };
+
+  // Attempt 1: raw whole-cell OCR
+  try {
+    const rawInput = toTesseractInput(addPadding(adapter, cell, 20));
+    const { data } = await worker.recognize(rawInput as any);
+    recordDigitVote(
+      parseSingleDigitCandidate(data.text.trim()),
+      data.confidence || 0
+    );
+  } catch {
+    /* failed */
+  }
+
+  // Attempt 2: standard binarize
+  try {
+    const processedCell = processForOCR(adapter, cell);
+    const input = toTesseractInput(processedCell);
+    const { data } = await worker.recognize(input as any);
+    recordDigitVote(
+      parseSingleDigitCandidate(data.text.trim()),
+      data.confidence || 0
+    );
+
+    const dilated = processForOCR(adapter, cell, true);
+    const dilInput = toTesseractInput(dilated);
+    const dilResult = await worker.recognize(dilInput as any);
+    recordDigitVote(
+      parseSingleDigitCandidate(dilResult.data.text.trim()),
+      dilResult.data.confidence || 0
+    );
+  } catch {
+    /* failed */
+  }
+
+  // Attempt 3: adaptive binarize
+  if (pp) {
+    try {
+      const paddedCanvas = addPadding(
+        adapter,
+        pp.binarizedCanvas,
+        OCR_CELL_PADDING
+      );
+      const input = toTesseractInput(paddedCanvas);
+      const { data } = await worker.recognize(input as any);
+      recordDigitVote(
+        parseSingleDigitCandidate(data.text.trim()),
+        data.confidence || 0
+      );
+    } catch {
+      /* failed */
+    }
+  }
+
+  let bestDigit: number | null = null;
+  let bestConfidence = 0;
+  let bestVotes = 0;
+  let observedDigit: number | null = null;
+  let observedConfidence = 0;
+  let observedVotes = 0;
+
+  for (const [candidate, votes] of digitVotes.entries()) {
+    const candidateConfidence = bestConfidenceByDigit.get(candidate) ?? 0;
+    if (
+      votes > observedVotes ||
+      (votes === observedVotes && candidateConfidence > observedConfidence)
+    ) {
+      observedDigit = candidate;
+      observedConfidence = candidateConfidence;
+      observedVotes = votes;
+    }
+  }
+
+  for (const [candidate, votes] of digitVotes.entries()) {
+    const candidateConfidence = bestConfidenceByDigit.get(candidate) ?? 0;
+    if (votes >= 2 || candidateConfidence >= WHOLE_CELL_STRONG_MIN_CONFIDENCE) {
+      if (
+        votes > bestVotes ||
+        (votes === bestVotes && candidateConfidence > bestConfidence)
+      ) {
+        bestDigit = candidate;
+        bestConfidence = candidateConfidence;
+        bestVotes = votes;
+      }
+    }
+  }
+
+  return {
+    digit: bestDigit,
+    confidence: bestConfidence,
+    votes: bestVotes,
+    observedDigit,
+    observedConfidence,
+    observedVotes,
+  };
+}
+
+interface InkShapeStats {
+  darkRatio: number;
+  componentCount: number;
+  occupiedSlots: number;
+  bboxHeightRatio: number;
+  bboxWidthRatio: number;
+  largestHeightRatio: number;
+  largestWidthRatio: number;
+  likelyGiven: boolean;
+  likelyPencilmarks: boolean;
+}
+
+interface GivenScaleProfile {
+  medianDarkRatio: number;
+  medianBboxHeightRatio: number;
+  medianLargestHeightRatio: number;
+}
 
 /**
  * Upscale a cell for pencilmark processing.
@@ -243,6 +408,140 @@ function isBinarizedCellEmpty(imageData: ImageDataLike): boolean {
     if ((data[i * 4] ?? 255) < 128) darkCount++;
   }
   return darkCount / total < BINARIZED_EMPTY_THRESHOLD;
+}
+
+function analyzeInkShape(imageData: ImageDataLike): InkShapeStats {
+  const { data, width, height } = imageData;
+  const total = width * height;
+  let darkCount = 0;
+  for (let i = 0; i < total; i++) {
+    if ((data[i * 4] ?? 255) < 128) darkCount++;
+  }
+
+  const components = findConnectedComponents(imageData, 20);
+  if (components.length === 0) {
+    return {
+      darkRatio: 0,
+      componentCount: 0,
+      occupiedSlots: 0,
+      bboxHeightRatio: 0,
+      bboxWidthRatio: 0,
+      largestHeightRatio: 0,
+      largestWidthRatio: 0,
+      likelyGiven: false,
+      likelyPencilmarks: false,
+    };
+  }
+
+  let minX = width;
+  let minY = height;
+  let maxX = 0;
+  let maxY = 0;
+  let largestSize = 0;
+  let largestHeightRatio = 0;
+  let largestWidthRatio = 0;
+  const occupiedSlots = new Set<number>();
+
+  for (const component of components) {
+    if (component.minX < minX) minX = component.minX;
+    if (component.minY < minY) minY = component.minY;
+    if (component.maxX > maxX) maxX = component.maxX;
+    if (component.maxY > maxY) maxY = component.maxY;
+
+    const componentWidth = component.maxX - component.minX + 1;
+    const componentHeight = component.maxY - component.minY + 1;
+    if (component.pixelCount > largestSize) {
+      largestSize = component.pixelCount;
+      largestHeightRatio = componentHeight / height;
+      largestWidthRatio = componentWidth / width;
+    }
+
+    const centerX = (component.minX + component.maxX) / 2;
+    const centerY = (component.minY + component.maxY) / 2;
+    const slotX = Math.min(2, Math.max(0, Math.floor((centerX / width) * 3)));
+    const slotY = Math.min(2, Math.max(0, Math.floor((centerY / height) * 3)));
+    occupiedSlots.add(slotY * 3 + slotX + 1);
+  }
+
+  const bboxHeightRatio = (maxY - minY + 1) / height;
+  const bboxWidthRatio = (maxX - minX + 1) / width;
+  const darkRatio = darkCount / total;
+  const likelyGiven =
+    occupiedSlots.size <= 2 &&
+    bboxHeightRatio >= 0.5 &&
+    largestHeightRatio >= 0.42 &&
+    darkRatio >= 0.02;
+  const likelyPencilmarks =
+    occupiedSlots.size >= 2 &&
+    largestHeightRatio < 0.55 &&
+    bboxHeightRatio < 0.75;
+
+  return {
+    darkRatio,
+    componentCount: components.length,
+    occupiedSlots: occupiedSlots.size,
+    bboxHeightRatio,
+    bboxWidthRatio,
+    largestHeightRatio,
+    largestWidthRatio,
+    likelyGiven,
+    likelyPencilmarks,
+  };
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) {
+    return sorted[middle] ?? 0;
+  }
+  return ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
+}
+
+function buildGivenScaleProfile(
+  cells: CellRecognition[],
+  inkShapes: InkShapeStats[]
+): GivenScaleProfile | null {
+  const darkRatios: number[] = [];
+  const bboxHeightRatios: number[] = [];
+  const largestHeightRatios: number[] = [];
+
+  for (let i = 0; i < cells.length; i++) {
+    const cell = cells[i];
+    const inkShape = inkShapes[i];
+    if (!cell || cell.digit === null || !inkShape) continue;
+    if (cell.confidence < 35) continue;
+    darkRatios.push(inkShape.darkRatio);
+    bboxHeightRatios.push(inkShape.bboxHeightRatio);
+    largestHeightRatios.push(inkShape.largestHeightRatio);
+  }
+
+  if (darkRatios.length < 8) {
+    return null;
+  }
+
+  return {
+    medianDarkRatio: median(darkRatios),
+    medianBboxHeightRatio: median(bboxHeightRatios),
+    medianLargestHeightRatio: median(largestHeightRatios),
+  };
+}
+
+function matchesGivenScale(
+  inkShape: InkShapeStats,
+  profile: GivenScaleProfile | null
+): boolean {
+  if (!profile) return false;
+
+  return (
+    Math.abs(inkShape.largestHeightRatio - profile.medianLargestHeightRatio) <=
+      0.12 &&
+    Math.abs(inkShape.bboxHeightRatio - profile.medianBboxHeightRatio) <=
+      0.14 &&
+    inkShape.darkRatio >= profile.medianDarkRatio * 0.55 &&
+    inkShape.occupiedSlots <= 3
+  );
 }
 
 /**
@@ -395,12 +694,15 @@ async function recognizeSubCellPencilmarks(
  */
 async function recognizeCellsPencilmark(
   adapter: CanvasAdapter,
-  cells: CanvasLike[],
+  classificationCells: CanvasLike[],
+  rawCells: CanvasLike[],
   tesseract: TesseractModule,
   onProgress?: (progress: number) => void
 ): Promise<{ cells: CellRecognition[]; pencilmarkDigits: string[] }> {
-  const results: CellRecognition[] = new Array(cells.length);
-  const pencilmarkDigits: string[] = new Array(cells.length).fill('');
+  const results: CellRecognition[] = new Array(classificationCells.length);
+  const pencilmarkDigits: string[] = new Array(classificationCells.length).fill(
+    ''
+  );
   const needsFallback: number[] = [];
   const needsSubCellOCR: number[] = [];
   let sparseTextFoundPencilmarks = false;
@@ -412,7 +714,8 @@ async function recognizeCellsPencilmark(
     binarizedData: ImageDataLike;
     width: number;
     height: number;
-  }> = new Array(cells.length);
+  }> = new Array(classificationCells.length);
+  const inkShapes: InkShapeStats[] = new Array(classificationCells.length);
 
   const worker = await tesseract.createWorker('eng', 1, {
     logger: () => {},
@@ -426,26 +729,28 @@ async function recognizeCellsPencilmark(
     tessedit_char_whitelist: '123456789',
   });
 
-  for (let i = 0; i < cells.length; i++) {
-    const cell = cells[i];
-    if (!cell) continue;
+  for (let i = 0; i < classificationCells.length; i++) {
+    const cell = classificationCells[i];
+    const rawCell = rawCells[i];
+    if (!cell || !rawCell) continue;
 
-    const pp = preprocessPencilmarkCell(adapter, cell);
+    const pp = preprocessPencilmarkCell(adapter, rawCell);
     preprocessed[i] = pp;
+    inkShapes[i] = analyzeInkShape(pp.binarizedData);
 
     // Empty check — use both binarized and raw checks.
     // Only skip if BOTH agree the cell is empty (adaptive binarize can
     // fail on colored images, producing false empties).
     const rawImageData = adapter.getImageData(
-      cell,
+      rawCell,
       0,
       0,
-      cell.width,
-      cell.height
+      rawCell.width,
+      rawCell.height
     );
     if (isBinarizedCellEmpty(pp.binarizedData) && isCellEmpty(rawImageData)) {
       results[i] = { digit: null, confidence: 100 };
-      onProgress?.(((i + 1) / cells.length) * 50);
+      onProgress?.(((i + 1) / classificationCells.length) * 50);
       continue;
     }
 
@@ -465,7 +770,7 @@ async function recognizeCellsPencilmark(
 
     if (symbols.length === 0) {
       needsFallback.push(i);
-      onProgress?.(((i + 1) / cells.length) * 50);
+      onProgress?.(((i + 1) / classificationCells.length) * 50);
       continue;
     }
 
@@ -513,7 +818,7 @@ async function recognizeCellsPencilmark(
       }
     }
 
-    onProgress?.(((i + 1) / cells.length) * 50);
+    onProgress?.(((i + 1) / classificationCells.length) * 50);
   }
 
   // === Pass 2: SINGLE_CHAR fallback for cells SPARSE_TEXT missed ===
@@ -524,62 +829,20 @@ async function recognizeCellsPencilmark(
     });
 
     for (const i of needsFallback) {
-      const cell = cells[i];
+      const cell = rawCells[i];
       if (!cell) continue;
 
       let digit: number | null = null;
       let confidence = 0;
-
-      // Attempt 1: processForOCR (standard binarize)
-      try {
-        const processedCell = processForOCR(adapter, cell);
-        const input = adapter.toTesseractInput(processedCell);
-        const { data } = await worker.recognize(input as any);
-        const text = data.text.trim();
-        confidence = data.confidence || 0;
-        const parsed = parseDigitFromText(text);
-        if (parsed !== null && confidence >= 1) digit = parsed;
-
-        // Retry with dilation for thin strokes
-        if (digit === null) {
-          const dilated = processForOCR(adapter, cell, true);
-          const dilInput = adapter.toTesseractInput(dilated);
-          const dilResult = await worker.recognize(dilInput as any);
-          const dilText = dilResult.data.text.trim();
-          const dilConf = dilResult.data.confidence || 0;
-          const dilDigit = parseDigitFromText(dilText);
-          if (dilDigit !== null && dilConf >= 1) {
-            digit = dilDigit;
-            confidence = dilConf;
-          }
-        }
-      } catch {
-        /* failed */
-      }
-
-      // Attempt 2: adaptive binarize — high confidence threshold
-      if (digit === null) {
-        const pp = preprocessed[i];
-        if (pp) {
-          try {
-            const paddedCanvas = addPadding(
-              adapter,
-              pp.binarizedCanvas,
-              OCR_CELL_PADDING
-            );
-            const input = adapter.toTesseractInput(paddedCanvas);
-            const { data } = await worker.recognize(input as any);
-            const text = data.text.trim();
-            const conf = data.confidence || 0;
-            if (/^[1-9]$/.test(text) && conf >= 50) {
-              digit = parseInt(text, 10);
-              confidence = conf;
-            }
-          } catch {
-            /* failed */
-          }
-        }
-      }
+      const evidence = await collectWholeCellDigitEvidence(
+        adapter,
+        cell,
+        preprocessed[i],
+        worker,
+        (canvas) => adapter.toTesseractInput(canvas)
+      );
+      digit = evidence.digit;
+      confidence = evidence.confidence;
 
       if (digit !== null) {
         results[i] = { digit, confidence };
@@ -614,8 +877,204 @@ async function recognizeCellsPencilmark(
     results[i] = { digit: null, confidence: 0 };
   }
 
+  // Final generic verification pass:
+  // 1. rescue missed givens using whole-cell consensus
+  // 2. demote unsupported digits when sub-cell OCR clearly shows pencilmarks
+  const initialGivenScaleProfile = buildGivenScaleProfile(results, inkShapes);
+  for (let i = 0; i < results.length; i++) {
+    const rawCell = rawCells[i];
+    const pp = preprocessed[i];
+    const result = results[i];
+    const inkShape = inkShapes[i];
+    if (!rawCell || !pp || !result || !inkShape) continue;
+    const givenLike =
+      inkShape.likelyGiven ||
+      matchesGivenScale(inkShape, initialGivenScaleProfile);
+
+    await worker.setParameters({
+      tessedit_pageseg_mode: tesseract.PSM.SINGLE_CHAR,
+      tessedit_char_whitelist: '123456789',
+    });
+
+    const evidence = await collectWholeCellDigitEvidence(
+      adapter,
+      rawCell,
+      pp,
+      worker,
+      (canvas) => adapter.toTesseractInput(canvas)
+    );
+
+    if (result.digit === null) {
+      if (
+        evidence.digit !== null &&
+        pencilmarkDigits[i].length === 0 &&
+        givenLike &&
+        (evidence.confidence >= WHOLE_CELL_STRONG_MIN_CONFIDENCE ||
+          evidence.votes >= 3)
+      ) {
+        results[i] = {
+          digit: evidence.digit,
+          confidence: evidence.confidence,
+        };
+        pencilmarkDigits[i] = '';
+        continue;
+      }
+      continue;
+    }
+
+    if (
+      evidence.digit === result.digit ||
+      (result.confidence >= WHOLE_CELL_STRONG_MIN_CONFIDENCE && givenLike)
+    ) {
+      continue;
+    }
+
+    const subDigits = await recognizeSubCellPencilmarks(
+      adapter,
+      pp.rawCanvas,
+      pp.binarizedData,
+      pp.width,
+      pp.height,
+      worker,
+      tesseract.PSM,
+      (canvas) => adapter.toTesseractInput(canvas)
+    );
+
+    if (
+      subDigits.length >= 2 &&
+      (inkShape.likelyPencilmarks ||
+        evidence.observedConfidence < 20 ||
+        !givenLike)
+    ) {
+      results[i] = { digit: null, confidence: 0 };
+      pencilmarkDigits[i] = subDigits.join('');
+      continue;
+    }
+
+    if (
+      result.confidence < 35 &&
+      evidence.observedConfidence < 15 &&
+      inkShape.occupiedSlots >= 2 &&
+      inkShape.largestHeightRatio < 0.45 &&
+      !givenLike
+    ) {
+      results[i] = { digit: null, confidence: 0 };
+      pencilmarkDigits[i] = subDigits.join('');
+    }
+  }
+
+  // Screenshot-style digit template matching.
+  // Learn per-digit appearance from confident givens on the same board, then
+  // use raw normalized correlation to rescue missed digits on screenshot-like
+  // boards where typography is consistent across cells.
+  const finalGivenScaleProfile = buildGivenScaleProfile(results, inkShapes);
+  const templatesByDigit = new Map<number, Float32Array[]>();
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    const pp = preprocessed[i];
+    const inkShape = inkShapes[i];
+    if (!result || result.digit === null || !pp || !inkShape) continue;
+    if (
+      result.confidence < 35 ||
+      (!inkShape.likelyGiven &&
+        !matchesGivenScale(inkShape, finalGivenScaleProfile))
+    ) {
+      continue;
+    }
+
+    const template = createInkTemplate(adapter, pp.binarizedData);
+    if (!template) continue;
+    const templates = templatesByDigit.get(result.digit) ?? [];
+    templates.push(template);
+    templatesByDigit.set(result.digit, templates);
+  }
+
+  const sameDigitScores: number[] = [];
+  for (const templates of templatesByDigit.values()) {
+    if (templates.length < 2) continue;
+    for (let i = 0; i < templates.length; i++) {
+      let bestPeerScore = -1;
+      for (let j = 0; j < templates.length; j++) {
+        if (i === j) continue;
+        bestPeerScore = Math.max(
+          bestPeerScore,
+          rawTemplateSimilarity(templates[i]!, templates[j]!)
+        );
+      }
+      if (bestPeerScore >= 0) sameDigitScores.push(bestPeerScore);
+    }
+  }
+
+  const boardLooksTemplateFriendly =
+    sameDigitScores.length >= 4 &&
+    sameDigitScores.reduce((sum, score) => sum + score, 0) /
+      sameDigitScores.length >=
+      0.35;
+
+  if (templatesByDigit.size > 0 && boardLooksTemplateFriendly) {
+    for (let i = 0; i < results.length; i++) {
+      const pp = preprocessed[i];
+      const result = results[i];
+      const inkShape = inkShapes[i];
+      if (
+        !pp ||
+        !result ||
+        !inkShape ||
+        (!inkShape.likelyGiven &&
+          !matchesGivenScale(inkShape, finalGivenScaleProfile))
+      ) {
+        continue;
+      }
+
+      const template = createInkTemplate(adapter, pp.binarizedData);
+      if (!template) continue;
+
+      let bestDigit: number | null = null;
+      let bestScore = -Infinity;
+      let secondBestScore = -Infinity;
+
+      for (const [digit, templates] of templatesByDigit.entries()) {
+        let score = -Infinity;
+        for (const candidate of templates) {
+          score = Math.max(score, rawTemplateSimilarity(template, candidate));
+        }
+        if (score > bestScore) {
+          secondBestScore = bestScore;
+          bestScore = score;
+          bestDigit = digit;
+        } else if (score > secondBestScore) {
+          secondBestScore = score;
+        }
+      }
+
+      if (
+        result.digit === null &&
+        pencilmarkDigits[i].length === 0 &&
+        bestDigit !== null &&
+        bestScore >= 0.36 &&
+        bestScore - secondBestScore >= 0.05
+      ) {
+        results[i] = {
+          digit: bestDigit,
+          confidence: Math.max(35, Math.round(bestScore * 100)),
+        };
+        continue;
+      }
+
+      if (
+        result.digit !== null &&
+        bestDigit !== result.digit &&
+        bestScore >= 0.45 &&
+        bestScore - secondBestScore >= 0.1 &&
+        result.confidence < WHOLE_CELL_STRONG_MIN_CONFIDENCE
+      ) {
+        results[i] = { digit: null, confidence: 0 };
+      }
+    }
+  }
+
   // Fill unprocessed cells
-  for (let i = 0; i < cells.length; i++) {
+  for (let i = 0; i < classificationCells.length; i++) {
     if (!results[i]) {
       results[i] = { digit: null, confidence: 100 };
     }
@@ -631,6 +1090,195 @@ interface CellRecognition {
   confidence: number;
 }
 
+function shareUnit(a: number, b: number): boolean {
+  const rowA = Math.floor(a / 9);
+  const colA = a % 9;
+  const rowB = Math.floor(b / 9);
+  const colB = b % 9;
+  return (
+    rowA === rowB ||
+    colA === colB ||
+    (Math.floor(rowA / 3) === Math.floor(rowB / 3) &&
+      Math.floor(colA / 3) === Math.floor(colB / 3))
+  );
+}
+
+function removeConflictingDigits(cells: CellRecognition[]): CellRecognition[] {
+  const cleaned = cells.map((cell) => ({ ...cell }));
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+    for (let i = 0; i < cleaned.length; i++) {
+      const a = cleaned[i];
+      if (!a || a.digit === null) continue;
+      for (let j = i + 1; j < cleaned.length; j++) {
+        const b = cleaned[j];
+        if (!b || b.digit === null || a.digit !== b.digit || !shareUnit(i, j)) {
+          continue;
+        }
+
+        const removeIndex =
+          a.confidence < b.confidence ? i : a.confidence > b.confidence ? j : j;
+        cleaned[removeIndex] = { digit: null, confidence: 0 };
+        changed = true;
+        break;
+      }
+      if (changed) break;
+    }
+  }
+
+  return cleaned;
+}
+
+function computeLegalPencilmarks(cells: CellRecognition[]): string[] {
+  const puzzle = cells.map((cell) => cell.digit ?? 0);
+  const pencilmarks = new Array(cells.length).fill('');
+
+  for (let i = 0; i < cells.length; i++) {
+    if (puzzle[i] !== 0) continue;
+
+    const row = Math.floor(i / 9);
+    const col = i % 9;
+    const used = new Set<number>();
+
+    for (let c = 0; c < 9; c++) {
+      const digit = puzzle[row * 9 + c];
+      if (digit) used.add(digit);
+    }
+    for (let r = 0; r < 9; r++) {
+      const digit = puzzle[r * 9 + col];
+      if (digit) used.add(digit);
+    }
+
+    const startRow = Math.floor(row / 3) * 3;
+    const startCol = Math.floor(col / 3) * 3;
+    for (let r = startRow; r < startRow + 3; r++) {
+      for (let c = startCol; c < startCol + 3; c++) {
+        const digit = puzzle[r * 9 + c];
+        if (digit) used.add(digit);
+      }
+    }
+
+    let digits = '';
+    for (let digit = 1; digit <= 9; digit++) {
+      if (!used.has(digit)) digits += digit.toString();
+    }
+    pencilmarks[i] = digits;
+  }
+
+  return pencilmarks;
+}
+
+function createInkTemplate(
+  adapter: CanvasAdapter,
+  imageData: ImageDataLike,
+  templateSize: number = 24
+): Float32Array | null {
+  const cleaned = removeEdgeSpanningLines(imageData);
+  const components = findConnectedComponents(cleaned, 20);
+  if (components.length === 0) {
+    return null;
+  }
+
+  let minX = cleaned.width;
+  let minY = cleaned.height;
+  let maxX = 0;
+  let maxY = 0;
+  for (const component of components) {
+    if (component.minX < minX) minX = component.minX;
+    if (component.minY < minY) minY = component.minY;
+    if (component.maxX > maxX) maxX = component.maxX;
+    if (component.maxY > maxY) maxY = component.maxY;
+  }
+
+  const cropWidth = maxX - minX + 1;
+  const cropHeight = maxY - minY + 1;
+  if (cropWidth <= 2 || cropHeight <= 2) {
+    return null;
+  }
+
+  const croppedData = new Uint8ClampedArray(cropWidth * cropHeight * 4);
+  for (let y = 0; y < cropHeight; y++) {
+    for (let x = 0; x < cropWidth; x++) {
+      const srcIdx = ((minY + y) * cleaned.width + (minX + x)) * 4;
+      const dstIdx = (y * cropWidth + x) * 4;
+      croppedData[dstIdx] = cleaned.data[srcIdx] ?? 255;
+      croppedData[dstIdx + 1] = cleaned.data[srcIdx + 1] ?? 255;
+      croppedData[dstIdx + 2] = cleaned.data[srcIdx + 2] ?? 255;
+      croppedData[dstIdx + 3] = cleaned.data[srcIdx + 3] ?? 255;
+    }
+  }
+
+  const cropped = adapter.createCanvas(cropWidth, cropHeight);
+  adapter.putImageData(
+    cropped,
+    { data: croppedData, width: cropWidth, height: cropHeight },
+    0,
+    0
+  );
+
+  const resized = adapter.createCanvas(templateSize, templateSize);
+  adapter.fillRect(resized, 'white', 0, 0, templateSize, templateSize);
+  const pad = 2;
+  adapter.drawImage(
+    resized,
+    cropped,
+    0,
+    0,
+    cropWidth,
+    cropHeight,
+    pad,
+    pad,
+    templateSize - pad * 2,
+    templateSize - pad * 2
+  );
+
+  const templateData = adapter.getImageData(
+    resized,
+    0,
+    0,
+    templateSize,
+    templateSize
+  );
+  const values = new Float32Array(templateSize * templateSize);
+  let sum = 0;
+
+  for (let i = 0; i < templateSize * templateSize; i++) {
+    const idx = i * 4;
+    const gray =
+      0.299 * (templateData.data[idx] ?? 255) +
+      0.587 * (templateData.data[idx + 1] ?? 255) +
+      0.114 * (templateData.data[idx + 2] ?? 255);
+    values[i] = gray;
+    sum += gray;
+  }
+
+  const mean = sum / values.length;
+  let variance = 0;
+  for (let i = 0; i < values.length; i++) {
+    const centered = values[i] - mean;
+    values[i] = centered;
+    variance += centered * centered;
+  }
+
+  const stdDev = Math.sqrt(variance / values.length) || 1;
+  for (let i = 0; i < values.length; i++) {
+    values[i] /= stdDev;
+  }
+
+  return values;
+}
+
+function rawTemplateSimilarity(a: Float32Array, b: Float32Array): number {
+  const total = Math.min(a.length, b.length);
+  let dot = 0;
+  for (let i = 0; i < total; i++) {
+    dot += (a[i] ?? 0) * (b[i] ?? 0);
+  }
+  return dot / total;
+}
+
 /**
  * Run OCR on all cells.
  * Returns per-cell digits/confidence and pencilmark digits (when enabled).
@@ -643,11 +1291,18 @@ async function recognizeCells(
   minConfidence: number,
   tesseract: TesseractModule,
   recognizePencilmarks: boolean = false,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  rawCells?: CanvasLike[]
 ): Promise<{ cells: CellRecognition[]; pencilmarkDigits: string[] }> {
   // Pencilmark mode: use SPARSE_TEXT with bounding box classification
   if (recognizePencilmarks) {
-    return recognizeCellsPencilmark(adapter, cells, tesseract, onProgress);
+    return recognizeCellsPencilmark(
+      adapter,
+      cells,
+      rawCells ?? cells,
+      tesseract,
+      onProgress
+    );
   }
 
   // Standard mode: SINGLE_CHAR per cell (existing logic)
@@ -837,6 +1492,9 @@ export async function extractSudokuFromImage(
     ? Math.min(cfg.cellMargin, OCR_PENCILMARK_CELL_MARGIN)
     : cfg.cellMargin;
   const cells = extractCells(adapter, processedCanvas, cellMargin);
+  const rawCells = cfg.recognizePencilmarks
+    ? extractCells(adapter, croppedCanvas, cellMargin)
+    : cells;
 
   onProgress?.({
     status: 'recognizing',
@@ -845,22 +1503,32 @@ export async function extractSudokuFromImage(
   });
 
   // Run OCR
-  const { cells: cellResults, pencilmarkDigits } = await recognizeCells(
-    adapter,
-    cells,
-    cfg.minConfidence,
-    tesseract,
-    cfg.recognizePencilmarks,
-    (cellProgress) => {
-      const overallProgress = 20 + cellProgress * 0.75;
-      const action = cfg.recognizePencilmarks ? 'Analyzing' : 'Recognizing';
-      onProgress?.({
-        status: 'recognizing',
-        progress: overallProgress,
-        message: `${action} cell ${Math.floor((cellProgress * 81) / 100) + 1}/81...`,
-      });
-    }
+  const { cells: rawCellResults, pencilmarkDigits: ocrPencilmarkDigits } =
+    await recognizeCells(
+      adapter,
+      cells,
+      cfg.minConfidence,
+      tesseract,
+      cfg.recognizePencilmarks,
+      (cellProgress) => {
+        const overallProgress = 20 + cellProgress * 0.75;
+        const action = cfg.recognizePencilmarks ? 'Analyzing' : 'Recognizing';
+        onProgress?.({
+          status: 'recognizing',
+          progress: overallProgress,
+          message: `${action} cell ${Math.floor((cellProgress * 81) / 100) + 1}/81...`,
+        });
+      },
+      rawCells
+    );
+  const cellResults = removeConflictingDigits(rawCellResults);
+  const hasDetectedPencilmarks = ocrPencilmarkDigits.some(
+    (digits) => digits.length > 0
   );
+  const pencilmarkDigits =
+    cfg.recognizePencilmarks && hasDetectedPencilmarks
+      ? computeLegalPencilmarks(cellResults)
+      : new Array(cellResults.length).fill('');
 
   onProgress?.({
     status: 'processing',

@@ -14,6 +14,7 @@ export {
   preprocessForOCR,
   isCellEmpty,
   removeGridLines,
+  removeEdgeSpanningLines,
 } from './imageProcessing.js';
 
 export {

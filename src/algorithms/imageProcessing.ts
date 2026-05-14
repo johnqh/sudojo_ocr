@@ -546,6 +546,95 @@ export function removeGridLines(
 }
 
 /**
+ * Remove thin line-like components that run along a cell edge and span most
+ * of the cell. This catches grid remnants that survive simple border flood
+ * removal after the cell has been cropped slightly inside the board.
+ */
+export function removeEdgeSpanningLines(
+  imageData: ImageDataLike
+): ImageDataLike {
+  const { data, width, height } = imageData;
+  const newData = new Uint8ClampedArray(data.length);
+  for (let i = 0; i < data.length; i++) {
+    newData[i] = safeGet(data, i);
+  }
+
+  const visited = new Uint8Array(width * height);
+
+  function isDark(x: number, y: number): boolean {
+    if (x < 0 || x >= width || y < 0 || y >= height) return false;
+    const idx = (y * width + x) * 4;
+    return (newData[idx] ?? 255) < 128;
+  }
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const startIdx = y * width + x;
+      if (visited[startIdx] || !isDark(x, y)) continue;
+
+      const pixels: [number, number][] = [];
+      let minX = x;
+      let minY = y;
+      let maxX = x;
+      let maxY = y;
+
+      const stack: [number, number][] = [[x, y]];
+      visited[startIdx] = 1;
+
+      while (stack.length > 0) {
+        const popped = stack.pop();
+        if (!popped) break;
+        const [cx, cy] = popped;
+        pixels.push([cx, cy]);
+        if (cx < minX) minX = cx;
+        if (cy < minY) minY = cy;
+        if (cx > maxX) maxX = cx;
+        if (cy > maxY) maxY = cy;
+
+        for (const [nx, ny] of [
+          [cx - 1, cy],
+          [cx + 1, cy],
+          [cx, cy - 1],
+          [cx, cy + 1],
+        ] as [number, number][]) {
+          if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+          const nIdx = ny * width + nx;
+          if (visited[nIdx] || !isDark(nx, ny)) continue;
+          visited[nIdx] = 1;
+          stack.push([nx, ny]);
+        }
+      }
+
+      const componentWidth = maxX - minX + 1;
+      const componentHeight = maxY - minY + 1;
+      const nearLeftOrRight = minX <= width * 0.08 || maxX >= width * 0.92;
+      const nearTopOrBottom = minY <= height * 0.08 || maxY >= height * 0.92;
+      const isVerticalGridLine =
+        nearLeftOrRight &&
+        componentHeight >= height * 0.85 &&
+        componentWidth <= width * 0.08;
+      const isHorizontalGridLine =
+        nearTopOrBottom &&
+        componentWidth >= width * 0.85 &&
+        componentHeight <= height * 0.08;
+
+      if (!isVerticalGridLine && !isHorizontalGridLine) {
+        continue;
+      }
+
+      for (const [px, py] of pixels) {
+        const idx = (py * width + px) * 4;
+        newData[idx] = 255;
+        newData[idx + 1] = 255;
+        newData[idx + 2] = 255;
+      }
+    }
+  }
+
+  return { data: newData, width, height };
+}
+
+/**
  * Determine if a cell is empty based on pixel standard deviation.
  * Empty cells have uniform color (low stdDev < 8), while cells with
  * digits have significant brightness variation.
