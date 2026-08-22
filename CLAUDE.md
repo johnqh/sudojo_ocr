@@ -1,5 +1,10 @@
 # CLAUDE.md
 
+> **Git policy — never auto-commit or auto-push.** Leave your work in the working tree.
+> Run `git commit`, `git push`, `gh pr create`, or `scripts/push_all.sh` **only when the user
+> explicitly asks in that turn**. Approval for an earlier change does not carry forward, and
+> finishing a task is not permission to commit it.
+
 This file provides context for AI assistants working on this codebase.
 
 ## Project Overview
@@ -238,3 +243,7 @@ const result = await extractSudokuFromImage(
 - `NodeCanvasAdapter.createCanvas()` throws if called before `init()`. Always use the `createNodeAdapter()` factory function.
 - The `toTesseractInput()` return type varies by platform: `HTMLCanvasElement` for web, `Buffer` (PNG) for Node.js.
 - The `0` -> `9` correction in `digitParsing.ts` is intentional: OCR "0" in a non-empty cell is likely a misrecognized 9 (since Sudoku uses 1-9, not 0).
+
+## Git Workflow
+
+- Do not use feature branches for code changes. Always stay on the current branch.
