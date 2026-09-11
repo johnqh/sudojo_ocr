@@ -8,12 +8,12 @@
 **Impact**: Significantly better OCR accuracy for real-world phone photos taken at angles.
 
 ### 1.2 Add Adaptive Thresholding
-**Current**: Binarization uses a global threshold of 160, which fails on images with uneven lighting (shadows, glare).
-**Improvement**: Replace the global `binarize()` with an adaptive threshold (e.g., Sauvola or Otsu method) that computes local thresholds per region.
+**Current**: Standard mode uses `binarize(img, 0.3)`, a per-cell threshold relative to that cell's luminance range. Pencilmark mode already uses per-cell Otsu (`adaptiveBinarize`). Neither is *local within* a cell or board, so both still struggle with shadows and glare. (`OCR_BINARIZE_THRESHOLD = 160` in `types.ts` is unused.)
+**Improvement**: Add a locally adaptive threshold (e.g., Sauvola) that computes thresholds per region.
 **Impact**: Much better digit extraction under poor or uneven lighting conditions.
 
 ### 1.3 Add OCR Confidence Retry Strategy
-**Current**: When initial OCR fails, only one retry with dilation is attempted. Low-confidence results are accepted as-is if above minConfidence.
+**Current**: In standard mode, a failed OCR gets only one retry with dilation, and low-confidence results are accepted as-is if above minConfidence. Pencilmark mode, which every consumer uses, already votes across four preprocessing variants (see `docs/OCR.md`).
 **Improvement**: Implement multiple retry strategies (different contrast levels, different margin ratios, rotation correction) and pick the result with highest overall confidence.
 **Impact**: Higher accuracy on marginal images.
 
@@ -35,12 +35,12 @@
 **Impact**: More reliable board detection in images with other rectangular elements.
 
 ### 2.4 Add Worker Pool for OCR
-**Current**: Uses a single Tesseract worker that processes cells sequentially (81 cells one at a time).
+**Current**: Uses a single Tesseract worker per call, created and terminated inside `extractSudokuFromImage()`, that processes cells sequentially. Pencilmark mode makes several OCR calls per cell.
 **Improvement**: Create a pool of 2-4 workers and process cells in parallel batches. Tesseract supports multiple worker instances.
 **Impact**: 2-4x faster OCR processing.
 
 ### 2.5 Add Published Algorithm Documentation
-**Current**: Algorithm details are only in code comments. No external documentation of the detection/preprocessing pipeline.
+**Current**: `docs/OCR.md` covers the pencilmark-mode pipeline and its tuning history, and `CLAUDE.md` has an architecture overview. Board detection and standard mode are only documented in code comments.
 **Improvement**: Add `docs/ALGORITHMS.md` documenting each processing step with diagrams of the pipeline, threshold values, and tuning guidance.
 **Impact**: Easier onboarding for contributors and better understanding of tuning parameters.
 
@@ -52,7 +52,7 @@
 **Impact**: Much easier to diagnose why OCR fails on specific images.
 
 ### 3.2 Add Confidence Heatmap Output
-**Current**: Returns per-cell confidence in `cellResults`, but no visual representation.
+**Current**: Per-cell confidence is computed internally but not returned. `OCRResult` only exposes the average `confidence` and `digitCount`.
 **Improvement**: Add an optional `generateConfidenceHeatmap()` function that renders a color-coded overlay showing which cells had low confidence.
 **Impact**: Helps users understand which cells to manually verify.
 

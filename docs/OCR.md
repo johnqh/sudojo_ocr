@@ -6,17 +6,26 @@ This document captures technical findings from implementing pencilmark recogniti
 
 ## Architecture
 
-The pencilmark pipeline has three passes when `recognizePencilmarks: true`:
+The pencilmark pipeline (`recognizeCellsPencilmark` in `src/ocr.ts`, used when `recognizePencilmarks: true`) runs five passes on one Tesseract worker, then post-processes:
 
 1. **Pass 1 — SINGLE_BLOCK classification**: Run Tesseract `PSM.SINGLE_BLOCK` on each preprocessed cell. Classify via symbol bounding box height:
    - Large symbol (height > 45% of cell) + few total symbols (≤ 2) → **given digit**
    - Large symbol + many symbols → **pencilmarks** (queue for sub-cell OCR)
    - Small symbols at 2+ grid positions → **pencilmarks**
-   - Nothing found → **fallback**
+   - Small symbols at a single grid position, or nothing found → **fallback**
 
-2. **Pass 2 — SINGLE_CHAR fallback**: For cells where SINGLE_BLOCK found nothing. Tries `processForOCR` (standard binarize) then adaptive binarize. If no digit found and the board has pencilmarks elsewhere, queues for sub-cell OCR.
+2. **Pass 2 — SINGLE_CHAR fallback**: For fallback cells, `collectWholeCellDigitEvidence()` votes across four variants: raw cell, `processForOCR` (standard binarize), `processForOCR` + dilation, and the adaptive-binarized (Otsu) cell. Only single-character reads count. A digit is accepted if it gets ≥ 2 votes or confidence ≥ 50. Otherwise, if pass 1 found pencilmarks anywhere on the board, the cell is queued for sub-cell OCR.
 
 3. **Pass 3 — Sub-cell OCR**: For pencilmark cells, run `PSM.SINGLE_CHAR` on each of the 9 sub-cells (3x3 grid). Supplements with connected component ink detection for pencilmarks that OCR misses.
+
+4. **Pass 4 — Verification**: Re-collects whole-cell evidence for every preprocessed cell (empties included) and uses `analyzeInkShape()` plus a board-level "given scale" profile (median ink/height of confident givens) to (a) rescue missed givens and (b) demote digits that sub-cell OCR shows are really pencilmark clusters.
+
+5. **Pass 5 — Template matching**: Builds 24×24 normalized ink templates from confident givens. If same-digit templates correlate well (mean ≥ 0.35 over ≥ 4 samples, i.e. screenshot-like consistent typography), it rescues empty given-sized cells (score ≥ 0.36, margin ≥ 0.05) and drops low-confidence digits that clearly match a different digit.
+
+**Post-processing** (in `extractSudokuFromImage`, both modes):
+
+- `removeConflictingDigits()`: if the same digit appears twice in a row, column, or box, drop the lower-confidence one (on a tie, the later cell). This partly implements recommendation 1 below.
+- `computeLegalPencilmarks()`: pencilmark mode only. If *any* cell had OCR-detected pencilmarks, the output `pencilmark.numbers` is the set of **legal candidates** for every empty cell, computed from the recognized givens. The per-sub-cell OCR digits are not returned. They only decide whether the board has pencilmarks, and which cells are digits.
 
 ## Preprocessing Pipeline
 
@@ -102,6 +111,8 @@ For cells classified as pencilmarks, each of the 9 sub-cells is OCR'd individual
 
 The position-based approach works because pencilmarks are always at fixed positions in the 3x3 grid (digit "1" at top-left, "2" at top-center, etc.). The digit value is inferred from position, not OCR text.
 
+These per-cell digits are internal. The returned `pencilmark.numbers` is replaced by computed legal candidates (see Post-processing above).
+
 ## Empty Cell Detection
 
 Dual check to handle colored images (e.g., blue digits on blue-tinted backgrounds):
@@ -122,20 +133,24 @@ Both must agree. This prevents the adaptive binarize from washing out colored co
 ```typescript
 tessedit_char_whitelist: '123456789'  // Only Sudoku digits
 tessedit_pageseg_mode: PSM.SINGLE_BLOCK  // Pass 1 (classification + digit reading)
-                     | PSM.SINGLE_CHAR   // Pass 2 (fallback) + Pass 3 (sub-cell OCR)
+                     | PSM.SINGLE_CHAR   // Pass 2 (fallback), Pass 3 (sub-cell OCR), Pass 4 (verification)
 ```
+
+One worker is created per `extractSudokuFromImage()` call (`createWorker('eng', 1)`, OEM LSTM-only) and switched between modes with `setParameters()`. Standard (non-pencilmark) mode uses `PSM.SINGLE_CHAR` **without** a whitelist and relies on `parseDigitFromText()` corrections instead.
 
 The `TesseractWorker` interface was extended to expose `data.symbols` (per-character bounding boxes) from `recognize()` results, and `PSM.SINGLE_BLOCK` / `PSM.SPARSE_TEXT` in addition to `PSM.SINGLE_CHAR`.
 
 ## Accuracy Results
 
-Tested on 3 sample images with user-verified ground truth:
+Tested on 3 sample images in `tests/` with user-verified ground truth (`*_truth.txt`). Reproduce with `bun run tests/evaluate-truth.ts` (~3 min in Node). Tesseract prints harmless `Image too small to scale!!` warnings during the run.
 
-| Image | Resolution | Digit Accuracy | Notes |
-|-------|-----------|---------------|-------|
-| lvc39h9c6ra81.jpg | 1071x1071 | **81/81 (100%)** | High-res, blue digits, background shading |
-| pencilmarks-full.png | 399x399 | **80/81 (98.8%)** | Purple pencilmarks, medium resolution |
-| pencil_marks_sample.gif | 334x334 | **75/81 (92.6%)** | Low-res, small pencilmarks, hardest image |
+| Image | Resolution | Digits (at 822cc0d, when this doc was written) | Digits (v1.1.42, 6c588a1) | Pencilmark cells exact (v1.1.42) | Notes |
+|-------|-----------|------|------|------|-------|
+| lvc39h9c6ra81.jpg | 1071x1071 | 81/81 (100%) | **80/81** (false `5` at cell 29) | 75/81 | High-res, blue digits, background shading |
+| pencilmarks-full.png | 399x399 | 80/81 (98.8%) | **80/81** (missed `4` at cell 15) | 79/81 | Purple pencilmarks, medium resolution |
+| pencil_marks_sample.gif | 334x334 | 75/81 (92.6%) | **81/81** | 81/81 | Low-res, small pencilmarks, hardest image |
+
+Output pencilmarks are computed legal candidates, so a wrong or missing given cascades into pencilmark mismatches across its row, column, and box. The v1.1.42 numbers reflect the passes 4–5 and post-processing added in 005de53. The committed `tests/*_results.json` files predate that change.
 
 ### Error Patterns by Image Resolution
 
@@ -146,10 +161,10 @@ Higher resolution images produce better results. At lower resolutions:
 
 ## Recommendations for Future Work
 
-1. **Sudoku-rule post-validation**: After OCR, validate digits against Sudoku constraints (no duplicate in row/column/block). A digit that violates constraints is likely a false positive from a pencilmark cell. This would fix most remaining errors without touching the OCR pipeline.
+1. **Sudoku-rule post-validation** *(partly done: `removeConflictingDigits()` drops the lower-confidence duplicate)*: After OCR, validate digits against Sudoku constraints (no duplicate in row/column/block). A digit that violates constraints is likely a false positive from a pencilmark cell. This would fix most remaining errors without touching the OCR pipeline.
 
 2. **Resolution-adaptive preprocessing**: Adjust preprocessing parameters based on detected image resolution. Low-res images need more upscaling and gentler contrast enhancement.
 
-3. **Custom classifier**: Train a small CNN to classify cells as digit/pencilmark/empty, replacing the bbox-based heuristic. Even a simple model would outperform threshold-based classification.
+3. **Custom classifier** *(pursued separately in `sudojo_ocr_ml`)*: Train a small CNN to classify cells as digit/pencilmark/empty, replacing the bbox-based heuristic. Even a simple model would outperform threshold-based classification. `sudojo_ocr_ml` went further with a whole-board ONNX recognizer served over HTTP. `sudojo_api` prefers it when `OCR_ML_URL` is set and falls back to this library otherwise.
 
-4. **Multi-attempt with voting**: Run OCR with multiple PSM modes and preprocessing variants, take majority vote. Current implementation avoids this due to Tesseract worker state issues with mode switching, but separate workers per mode would solve it (at the cost of memory/initialization time).
+4. **Multi-attempt with voting** *(partly done: passes 2 and 4 vote across preprocessing variants in `SINGLE_CHAR` mode on one worker)*: Run OCR with multiple PSM modes and preprocessing variants, take majority vote. Current implementation avoids this due to Tesseract worker state issues with mode switching, but separate workers per mode would solve it (at the cost of memory/initialization time).
