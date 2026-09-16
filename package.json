@@ -1,7 +1,7 @@
 {
   "name": "@sudobility/sudojo_ocr",
-  "version": "1.1.43",
-  "description": "OCR library for Sudoku puzzle scanning - works on Web, React Native, and Node.js",
+  "version": "1.1.44",
+  "description": "OCR library for extracting Sudoku puzzles from images (Node.js; recognition via paddle_ocr)",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -9,10 +9,6 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
-    },
-    "./web": {
-      "import": "./dist/adapters/web.js",
-      "types": "./dist/adapters/web.d.ts"
     },
     "./node": {
       "import": "./dist/adapters/node.js",
@@ -44,13 +40,12 @@
     "sudoku",
     "sudojo",
     "image-recognition",
-    "tesseract"
+    "paddleocr"
   ],
   "author": "Sudobility",
   "license": "BUSL-1.1",
   "peerDependencies": {
-    "tesseract.js": "^5.0.0 || ^6.0.0 || ^7.0.0",
-    "@sudobility/sudojo_types": "^1.2.68"
+    "@sudobility/sudojo_types": "^1.2.69"
   },
   "peerDependenciesMeta": {
     "@napi-rs/canvas": {

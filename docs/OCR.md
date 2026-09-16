@@ -1,5 +1,13 @@
 # OCR Pipeline — Technical Findings
 
+> **Historical (superseded 2026-09-13).** Everything below describes the **Tesseract** pipeline —
+> the 5-pass pencilmark passes, per-cell thresholds and accuracy tables — which has been deleted.
+> Recognition is now a single `POST /v1/ocr` to `paddle_ocr` over the cropped board, and pencilmark
+> glyphs are never read. See `CLAUDE.md` and
+> `docs/superpowers/specs/2026-09-13-paddle-ocr-recognition-design.md`. Kept because the board
+> detection findings and the failure taxonomy still apply, and because these thresholds record why
+> per-cell recognition was hard enough to be worth replacing.
+
 ## Overview
 
 This document captures technical findings from implementing pencilmark recognition in the Sudoku OCR pipeline. It covers what works, what doesn't, and why — to inform future optimization work.

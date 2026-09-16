@@ -170,10 +170,6 @@ export class NodeCanvasAdapter implements CanvasAdapter {
     ctx.fillRect(x, y, width, height);
   }
 
-  toTesseractInput(canvas: CanvasLike): Buffer {
-    return (canvas as unknown as NapiCanvas).toBuffer('image/png');
-  }
-
   toDataURL(canvas: CanvasLike): string {
     return (canvas as unknown as NapiCanvas).toDataURL('image/png');
   }

@@ -62,7 +62,7 @@ export const OCR_PENCILMARK_MIN_INK_RATIO = 0.03;
 /** Cell margin for pencilmark mode — minimal trim, grid line removal handles the rest */
 export const OCR_PENCILMARK_CELL_MARGIN = 0.03;
 
-/** Target minimum cell dimension for pencilmark OCR (px) — 3x upscale for optimal Tesseract accuracy */
+/** Target minimum cell dimension for pencilmark OCR (px) */
 export const OCR_PENCILMARK_TARGET_CELL_SIZE = 200;
 
 /** Rectangle bounds */
@@ -128,9 +128,6 @@ export interface CanvasAdapter {
     height: number
   ): void;
 
-  /** Convert canvas to format suitable for Tesseract */
-  toTesseractInput(canvas: CanvasLike): unknown;
-
   /** Convert canvas to data URL (for debugging) */
   toDataURL(canvas: CanvasLike): string;
 }
@@ -154,49 +151,16 @@ export interface ImageDataLike {
   height: number;
 }
 
-/** Bounding box for a recognized Tesseract symbol */
-export interface TesseractSymbolBbox {
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-}
-
-/** A single recognized character with position and confidence */
-export interface TesseractSymbol {
-  text: string;
+/** Per-cell recognition result */
+export interface CellRecognition {
+  digit: number | null;
   confidence: number;
-  bbox: TesseractSymbolBbox;
 }
 
-/**
- * Minimal Tesseract.js interface that works with both v5 and v7
- * This allows the library to be used with any compatible version
- */
-export interface TesseractModule {
-  createWorker: (
-    lang: string,
-    oem?: number,
-
-    options?: any
-  ) => Promise<TesseractWorker>;
-  PSM: {
-    SINGLE_CHAR: number;
-    SINGLE_BLOCK: number;
-    SPARSE_TEXT: number;
-  };
-}
-
-/** Minimal Tesseract Worker interface */
-export interface TesseractWorker {
-  setParameters: (params: any) => Promise<void>;
-
-  recognize: (image: any) => Promise<{
-    data: {
-      text: string;
-      confidence?: number;
-      symbols?: TesseractSymbol[];
-    };
-  }>;
-  terminate: () => Promise<void>;
+/** Connection settings for the paddle_ocr recognition service. */
+export interface PaddleConfig {
+  /** Base URL, e.g. "http://ocr.sudobility.com". No trailing slash. */
+  url: string;
+  /** Request timeout in ms. Default 30000. */
+  timeoutMs?: number;
 }

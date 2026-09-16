@@ -1,279 +1,139 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+/**
+ * End-to-end tests for extractSudokuFromImage.
+ *
+ * The offline suite fakes the paddle_ocr HTTP response so board detection and
+ * assembly are exercised without the network. The live suite runs the real
+ * service and is opt-in:
+ *
+ *   PADDLE_OCR_URL=http://ocr.sudobility.com bun run test
+ */
+
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import Tesseract from 'tesseract.js';
+import { extractSudokuFromImage, detectAndCropBoard } from '../ocr.js';
 import { createNodeAdapter } from '../adapters/node.js';
-import { extractSudokuFromImage } from '../ocr.js';
-import type { CanvasAdapter } from '../types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const TIMEOUT = { timeout: 120_000 };
+const FIXTURES = path.resolve(__dirname, 'fixtures');
 
-let adapter: CanvasAdapter;
+const BOARDS = [
+  {
+    file: 'Sudoku-Board-1.jpg',
+    expected:
+      '509000400708304900601000730462500000385720649107408200200100004003040087070053006',
+  },
+  {
+    file: 'Sudoku-Board-2.png',
+    expected:
+      '700520008056098000040367050062780000801400002430019060000005000500602931007941500',
+  },
+  {
+    file: 'Sudoku-Board-3.jpg',
+    expected:
+      '000150000000894062908070050050483020603010500800205309140008090280940005000607800',
+  },
+];
 
-beforeAll(async () => {
-  adapter = await createNodeAdapter();
-});
-
-describe('extractSudokuFromImage', () => {
-  const TEST_CASES = [
-    {
-      name: 'Board-1',
-      path: path.resolve(__dirname, 'fixtures/Sudoku-Board-1.jpg'),
-      expected:
-        '509000400708304900601000730462500000385720649107408200200100004003040087070053006',
-    },
-    {
-      name: 'Board-2',
-      path: path.resolve(__dirname, 'fixtures/Sudoku-Board-2.png'),
-      expected:
-        '700520008056098000040367050062780000801400002430019060000005000500602931007941500',
-    },
-    {
-      name: 'Board-3',
-      path: path.resolve(__dirname, 'fixtures/Sudoku-Board-3.jpg'),
-      expected:
-        '000150000000894062908070050050483020603010500800205309140008090280940005000607800',
-    },
-  ];
-
-  for (const tc of TEST_CASES) {
-    it(`should recognize digits in ${tc.name}`, TIMEOUT, async () => {
-      const result = await extractSudokuFromImage(adapter, tc.path, Tesseract, {
-        skipBoardDetection: false,
-      });
-
-      expect(result.board.original).toHaveLength(81);
-      expect(result.digitCount).toBeGreaterThan(0);
-
-      let correct = 0;
-      for (let i = 0; i < 81; i++) {
-        if (result.board.original[i] === tc.expected[i]) correct++;
-      }
-      expect(correct).toBeGreaterThanOrEqual(77);
+/** Build one paddle block per given digit, centred in its cell. */
+function blocksFor(expected: string, size: number) {
+  const cell = size / 9;
+  const blocks = [];
+  for (let i = 0; i < 81; i++) {
+    const digit = expected[i];
+    if (digit === '0') continue;
+    const row = Math.floor(i / 9);
+    const col = i % 9;
+    blocks.push({
+      text: digit,
+      confidence: 100,
+      bbox: {
+        x: Math.round(col * cell + cell * 0.3),
+        y: Math.round(row * cell + cell * 0.2),
+        width: Math.round(cell * 0.4),
+        height: Math.round(cell * 0.6),
+      },
     });
   }
+  return blocks;
+}
 
-  it(
-    'should set autopencil false when recognizePencilmarks is disabled',
-    TIMEOUT,
-    async () => {
-      const tc = TEST_CASES[0]!;
-      const result = await extractSudokuFromImage(adapter, tc.path, Tesseract, {
-        recognizePencilmarks: false,
+describe('extractSudokuFromImage with a faked paddle service', () => {
+  it('builds a board from the blocks paddle returns', async () => {
+    const adapter = await createNodeAdapter();
+    const image = readFileSync(path.join(FIXTURES, BOARDS[0].file));
+    const expected = BOARDS[0].expected;
+
+    // The fake must lay its blocks out on the same grid the real crop produces,
+    // so ask for the crop first and use its actual size.
+    const croppedUrl = await detectAndCropBoard(adapter, image);
+    expect(croppedUrl).toContain('data:image/png;base64,');
+    const cropped = await adapter.loadImage(
+      Buffer.from(croppedUrl.split(',')[1], 'base64')
+    );
+
+    const blocks = blocksFor(expected, cropped.width);
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ blocks }), {
+        status: 200,
+      })) as unknown as typeof fetch;
+    try {
+      const result = await extractSudokuFromImage(adapter, image, {
+        url: 'http://fake.invalid',
       });
-
-      expect(result.board.pencilmark.autopencil).toBe(false);
+      expect(result.board.original).toBe(expected);
+      expect(result.digitCount).toBe(
+        expected.split('').filter((d) => d !== '0').length
+      );
+      expect(result.confidence).toBe(100);
+    } finally {
+      globalThis.fetch = originalFetch;
     }
-  );
+  });
 
-  it(
-    'should set autopencil false for digit-only board with recognizePencilmarks enabled',
-    TIMEOUT,
-    async () => {
-      const tc = TEST_CASES[0]!;
-      const result = await extractSudokuFromImage(adapter, tc.path, Tesseract, {
-        recognizePencilmarks: true,
+  it('returns an empty board when paddle finds nothing', async () => {
+    const adapter = await createNodeAdapter();
+    const image = readFileSync(path.join(FIXTURES, BOARDS[0].file));
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ blocks: [] }), {
+        status: 200,
+      })) as unknown as typeof fetch;
+    try {
+      const result = await extractSudokuFromImage(adapter, image, {
+        url: 'http://fake.invalid',
       });
-
-      expect(result.board.pencilmark.autopencil).toBe(false);
-      expect(result.digitCount).toBeGreaterThan(0);
+      expect(result.board.original).toBe('0'.repeat(81));
+      expect(result.digitCount).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
     }
-  );
+  });
 });
 
-describe('extractSudokuFromImage with pencilmarks', () => {
-  const PENCILMARK_IMAGE = path.resolve(
-    __dirname,
-    'fixtures/Sudoku-Board-Pencilmarks.png'
-  );
+/** The live service. Opt in with PADDLE_OCR_URL. */
+const LIVE_URL = process.env.PADDLE_OCR_URL;
 
-  // Expected large digits from the image (0 = empty/pencilmark cell)
-  const EXPECTED_DIGITS =
-    '600320709' +
-    '290000300' +
-    '073869002' +
-    '300604000' +
-    '060200030' +
-    '000503001' +
-    '700932000' +
-    '031006298' +
-    '926000073';
-
-  // Expected pencilmarks per cell (comma-separated, 81 entries)
-  // Empty string = no pencilmarks (digit cell or truly empty)
-  const EXPECTED_PENCILMARKS =
-    ',1458,458,,,15,,1458,' +
-    ',,,458,147,1457,157,,14568,456,' +
-    '145,,,,,,145,145,,' +
-    ',158,25789,,1789,,589,258,57,' +
-    '1458,,45789,,1789,178,4589,,457,' +
-    '48,48,24789,,789,,4689,2468,,' +
-    ',458,458,,,,1456,1456,456,' +
-    '45,,,47,457,,,,,' +
-    ',,,14,1458,158,145,,';
-
-  const expectedEntries = EXPECTED_PENCILMARKS.split(',');
-
-  // Indices of cells that have pencilmarks
-  const PENCILMARK_CELL_INDICES = expectedEntries
-    .map((e, i) => (e.length > 0 ? i : -1))
-    .filter((i) => i >= 0);
-
-  it('should detect pencilmarks and set autopencil true', TIMEOUT, async () => {
-    const result = await extractSudokuFromImage(
-      adapter,
-      PENCILMARK_IMAGE,
-      Tesseract,
-      {
-        recognizePencilmarks: true,
-      }
-    );
-
-    expect(result.board.pencilmark.autopencil).toBe(true);
-
-    const entries = result.board.pencilmark.numbers.split(',');
-    expect(entries).toHaveLength(81);
-
-    // Should detect pencilmarks in multiple cells
-    const nonEmpty = entries.filter((e) => e.length > 0);
-    expect(nonEmpty.length).toBeGreaterThanOrEqual(10);
-  });
-
-  it(
-    'should recognize large digits correctly alongside pencilmarks',
-    TIMEOUT,
-    async () => {
-      const result = await extractSudokuFromImage(
-        adapter,
-        PENCILMARK_IMAGE,
-        Tesseract,
-        {
-          recognizePencilmarks: true,
+describe.skipIf(!LIVE_URL)(
+  'extractSudokuFromImage against live paddle_ocr',
+  () => {
+    for (const board of BOARDS) {
+      it(`reads ${board.file} exactly`, { timeout: 60000 }, async () => {
+        const adapter = await createNodeAdapter();
+        const image = readFileSync(path.join(FIXTURES, board.file));
+        const result = await extractSudokuFromImage(adapter, image, {
+          url: LIVE_URL!,
+        });
+        let correct = 0;
+        for (let i = 0; i < 81; i++) {
+          if (result.board.original[i] === board.expected[i]) correct++;
         }
-      );
-
-      expect(result.digitCount).toBeGreaterThan(0);
-
-      const puzzle = result.board.original;
-      let correctGivens = 0;
-      let totalGivens = 0;
-      for (let i = 0; i < 81; i++) {
-        if (EXPECTED_DIGITS[i] !== '0') {
-          totalGivens++;
-          if (puzzle[i] === EXPECTED_DIGITS[i]) correctGivens++;
-        }
-      }
-      // Expect at least 90% of given digits recognized correctly
-      expect(correctGivens).toBeGreaterThanOrEqual(
-        Math.floor(totalGivens * 0.9)
-      );
+        expect(correct).toBe(81);
+      });
     }
-  );
-
-  it(
-    'should not set autopencil when recognizePencilmarks is disabled',
-    TIMEOUT,
-    async () => {
-      const result = await extractSudokuFromImage(
-        adapter,
-        PENCILMARK_IMAGE,
-        Tesseract,
-        {
-          recognizePencilmarks: false,
-        }
-      );
-
-      expect(result.board.pencilmark.autopencil).toBe(false);
-      const entries = result.board.pencilmark.numbers.split(',');
-      expect(entries.every((e) => e === '')).toBe(true);
-    }
-  );
-
-  it('should produce valid pencilmark number entries', TIMEOUT, async () => {
-    const result = await extractSudokuFromImage(
-      adapter,
-      PENCILMARK_IMAGE,
-      Tesseract,
-      {
-        recognizePencilmarks: true,
-      }
-    );
-
-    const entries = result.board.pencilmark.numbers.split(',');
-
-    // Each entry should be empty or contain only digits 1-9
-    for (const entry of entries) {
-      if (entry.length > 0) {
-        expect(entry).toMatch(/^[1-9]+$/);
-      }
-    }
-
-    // Cells with large digits should NOT have pencilmark entries
-    for (let i = 0; i < 81; i++) {
-      if (EXPECTED_DIGITS[i] !== '0' && result.board.original[i] !== '0') {
-        expect(entries[i]).toBe('');
-      }
-    }
-  });
-
-  it('should detect pencilmarks in expected cells', TIMEOUT, async () => {
-    const result = await extractSudokuFromImage(
-      adapter,
-      PENCILMARK_IMAGE,
-      Tesseract,
-      {
-        recognizePencilmarks: true,
-      }
-    );
-
-    const entries = result.board.pencilmark.numbers.split(',');
-
-    // Count how many expected pencilmark cells were actually detected
-    let detected = 0;
-    for (const idx of PENCILMARK_CELL_INDICES) {
-      if (entries[idx] && entries[idx].length > 0) {
-        detected++;
-      }
-    }
-
-    // Expect at least 50% of known pencilmark cells to be detected
-    expect(detected).toBeGreaterThanOrEqual(
-      Math.floor(PENCILMARK_CELL_INDICES.length * 0.5)
-    );
-  });
-
-  it('should detect correct pencilmark digits per cell', TIMEOUT, async () => {
-    const result = await extractSudokuFromImage(
-      adapter,
-      PENCILMARK_IMAGE,
-      Tesseract,
-      {
-        recognizePencilmarks: true,
-      }
-    );
-
-    const entries = result.board.pencilmark.numbers.split(',');
-
-    // For each detected pencilmark cell, check that detected digits are
-    // a subset of the expected digits (no false positives for wrong digits)
-    let correctSubsetCount = 0;
-    let detectedCells = 0;
-    for (const idx of PENCILMARK_CELL_INDICES) {
-      if (!entries[idx] || entries[idx].length === 0) continue;
-      detectedCells++;
-      const detectedDigits = new Set(entries[idx].split(''));
-      const expectedDigits = new Set(expectedEntries[idx].split(''));
-      // Check each detected digit is in the expected set
-      const allCorrect = [...detectedDigits].every((d) =>
-        expectedDigits.has(d)
-      );
-      if (allCorrect) correctSubsetCount++;
-    }
-
-    // At least 50% of detected cells should have only correct digits (no false positives)
-    expect(correctSubsetCount).toBeGreaterThanOrEqual(
-      Math.floor(detectedCells * 0.5)
-    );
-  });
-});
+  }
+);

@@ -1,25 +1,18 @@
 /**
  * @sudobility/sudojo_ocr - OCR library for Sudoku puzzle scanning
  *
- * Works on Web, React Native, and Node.js.
+ * Runs in Node.js. Board detection happens in-process; digit recognition is a
+ * single HTTP call to the paddle_ocr service.
  *
  * Usage:
  * ```typescript
- * // Web/Browser
- * import { extractSudokuFromImage } from '@sudobility/sudojo_ocr';
- * import { createWebAdapter } from '@sudobility/sudojo_ocr/web';
- * import Tesseract from 'tesseract.js';
- *
- * const adapter = createWebAdapter();
- * const result = await extractSudokuFromImage(adapter, imageFile, Tesseract);
- *
- * // Node.js
  * import { extractSudokuFromImage } from '@sudobility/sudojo_ocr';
  * import { createNodeAdapter } from '@sudobility/sudojo_ocr/node';
- * import Tesseract from 'tesseract.js';
  *
  * const adapter = await createNodeAdapter();
- * const result = await extractSudokuFromImage(adapter, imageBuffer, Tesseract);
+ * const result = await extractSudokuFromImage(adapter, imageBuffer, {
+ *   url: 'http://ocr.sudobility.com',
+ * });
  * ```
  */
 
@@ -33,11 +26,12 @@ export type {
   CanvasLike,
   ImageLike,
   ImageDataLike,
-  TesseractModule,
-  TesseractWorker,
-  TesseractSymbolBbox,
-  TesseractSymbol,
+  CellRecognition,
+  PaddleConfig,
 } from './types.js';
+
+export type { PaddleBlock, BoardRecognition } from './paddle.js';
+export { mapBlocksToBoard, recognizeBoard } from './paddle.js';
 
 export { DEFAULT_OCR_CONFIG } from './types.js';
 
