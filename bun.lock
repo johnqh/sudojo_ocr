@@ -23,7 +23,7 @@
         "vitest": "^4.0.15",
       },
       "peerDependencies": {
-        "@sudobility/sudojo_types": "^1.2.69",
+        "@sudobility/sudojo_types": "^1.2.70",
       },
     },
   },
