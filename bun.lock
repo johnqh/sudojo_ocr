@@ -23,8 +23,12 @@
         "vitest": "^4.0.15",
       },
       "peerDependencies": {
+        "@napi-rs/canvas": "*",
         "@sudobility/sudojo_types": "^1.2.70",
       },
+      "optionalPeers": [
+        "@napi-rs/canvas",
+      ],
     },
   },
   "packages": {
